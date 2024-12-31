@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: invoices-microservice
+
+Parameters:
+  UserPoolId:
+    Type: String
+    Description: User Pool ID for cognito provider
+  Audience:
+    Type: String
+    Description: Client ID for user pool
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 100
+    MemorySize: 128
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref Table
+        ENDPOINT_OVERRIDE: ''
+        userId: ''
+        userName: ''
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        DefaultAuthorizer: GeneralAuth
+        Authorizers:
+          GeneralAuth:
+            IdentitySource: '$request.header.Authorization'
+            JwtConfiguration:
+              audience:
+                - !Ref Audience
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}
+      CorsConfiguration:
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowOrigins:
+          - 'http://localhost:5173'
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+
+  Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: invoices
+      AttributeDefinitions:
+        - AttributeType: S
+          AttributeName: userId
+        - AttributeType: S
+          AttributeName: invoiceId
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: invoiceId
+          KeyType: RANGE
+
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+
+  postInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: nodejs
+      Handler: postInvoice.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Table
+      Events:
+        RootGet:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: POST
+            ApiId: !Ref HttpApi
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+        EntryPoints:
+          - functions/postInvoice.ts
+
+  # getAllClientsFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: nodejs
+  #     Handler: getAllClients.handler
+  #     Policies:
+  #       - DynamoDBWritePolicy:
+  #           TableName: !Ref Table
+  #     Events:
+  #       RootGet:
+  #         Type: HttpApi
+  #         Properties:
+  #           Path: /
+  #           Method: GET
+  #           ApiId: !Ref HttpApi
+
+  #   Metadata:
+  #     BuildMethod: esbuild
+  #     BuildProperties:
+  #       Minify: true
+  #       Target: 'es2020'
+  #       Sourcemap: true
+  #       EntryPoints:
+  #         - functions/getAllClients.ts
+
+  # getClientByIdFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: nodejs
+  #     Handler: getClientById.handler
+  #     Policies:
+  #       - DynamoDBWritePolicy:
+  #           TableName: !Ref Table
+  #     Events:
+  #       RootGet:
+  #         Type: HttpApi
+  #         Properties:
+  #           Path: /{clientId}
+  #           Method: GET
+  #           ApiId: !Ref HttpApi
+
+  #   Metadata:
+  #     BuildMethod: esbuild
+  #     BuildProperties:
+  #       Minify: true
+  #       Target: 'es2020'
+  #       Sourcemap: true
+  #       EntryPoints:
+  #         - functions/getClientById.ts
+
+  # updateClientFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: nodejs
+  #     Handler: updateClient.handler
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref Table
+  #     Events:
+  #       RootGet:
+  #         Type: HttpApi
+  #         Properties:
+  #           Path: /{clientId}
+  #           Method: PATCH
+  #           ApiId: !Ref HttpApi
+  #   Metadata:
+  #     BuildMethod: esbuild
+  #     BuildProperties:
+  #       Minify: true
+  #       Target: 'es2020'
+  #       Sourcemap: true
+  #       EntryPoints:
+  #         - functions/updateClient.ts

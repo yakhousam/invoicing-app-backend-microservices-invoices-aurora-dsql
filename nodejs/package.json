@@ -1,0 +1,44 @@
+{
+  "name": "invoices-microservice",
+  "version": "1.0.0",
+  "scripts": {
+    "compile": "tsc",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@faker-js/faker": "^9.3.0",
+    "@types/aws-lambda": "^8.10.146",
+    "@types/http-errors": "^2.0.4",
+    "@types/node": "^22.10.1",
+    "@vitest/coverage-v8": "^2.1.8",
+    "aws-sdk-client-mock": "^4.1.0",
+    "esbuild": "^0.24.2",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.705.0",
+    "@aws-sdk/lib-dynamodb": "^3.705.0",
+    "@middy/core": "^6.0.0",
+    "@middy/error-logger": "^6.0.0",
+    "@middy/http-content-encoding": "^6.0.0",
+    "@middy/http-cors": "^6.0.0",
+    "@middy/http-error-handler": "^6.0.0",
+    "@middy/http-event-normalizer": "^6.0.0",
+    "@middy/http-header-normalizer": "^6.0.0",
+    "@middy/http-json-body-parser": "^6.0.0",
+    "@middy/http-security-headers": "^6.0.0",
+    "dayjs": "^1.11.13",
+    "http-errors": "^2.0.0",
+    "zod": "^3.24.1"
+  }
+}

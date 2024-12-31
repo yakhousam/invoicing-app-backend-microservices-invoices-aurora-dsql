@@ -1,0 +1,101 @@
+import { ddbDocClient, tableName } from '@/db/client'
+import { createInvoiceSchema, invoiceSchema, type Invoice } from '@/validation'
+import { PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import {
+  type APIGatewayProxyEvent,
+  type APIGatewayProxyResult
+} from 'aws-lambda'
+import dayjs from 'dayjs'
+import createError from 'http-errors'
+import { z, ZodError } from 'zod'
+
+const postClientController = async (
+  event: APIGatewayProxyEvent
+): Promise<APIGatewayProxyResult> => {
+  try {
+    const userId = invoiceSchema.shape.userId.parse(
+      event.requestContext.authorizer?.jwt?.claims?.sub
+    )
+    const userName = invoiceSchema.shape.userName.parse(
+      event.requestContext.authorizer?.jwt?.claims?.name
+    )
+    const validateBody = createInvoiceSchema.parse(event.body)
+
+    const currentYear = dayjs().year()
+
+    // Increment the invoice number for the current year
+    const updateCommand = new UpdateCommand({
+      TableName: tableName,
+      Key: { userId, invoiceId: `counter-${currentYear}` },
+      UpdateExpression:
+        'SET invoiceNumber = if_not_exists(invoiceNumber, :start) + :inc',
+      ExpressionAttributeValues: {
+        ':inc': 1,
+        ':start': 0
+      },
+      ReturnValues: 'UPDATED_NEW'
+    })
+
+    const counterResult = await ddbDocClient.send(updateCommand)
+    const incrementalNumber = z
+      .number()
+      .parse(counterResult.Attributes?.invoiceNumber)
+
+    // Format the invoice number as "currentYear-incNumber"
+    const newInvoiceNumber = `${currentYear}-${incrementalNumber}`
+
+    const invoiceStatus: Invoice['status'] = validateBody.invoiceDate
+      ? dayjs(validateBody.invoiceDate).isBefore(
+          dayjs().subtract(validateBody.invoiceDueDays, 'day')
+        )
+        ? 'overdue'
+        : 'sent'
+      : 'sent'
+
+    const subTotal = validateBody.items.reduce((acc, item) => {
+      return acc + item.itemPrice * item.itemQuantity
+    }, 0)
+
+    const taxAmount =
+      validateBody.taxPercentage > 0
+        ? subTotal * (validateBody.taxPercentage / 100)
+        : 0
+    const totalAmount = subTotal + taxAmount
+
+    const newInvoice: Invoice = {
+      ...validateBody,
+      invoiceId: newInvoiceNumber,
+      userId,
+      userName,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      items: validateBody.items.map((item) => ({
+        ...item,
+        itemId: crypto.randomUUID()
+      })),
+      taxAmount,
+      subTotal,
+      totalAmount,
+      status: invoiceStatus
+    }
+
+    const command = new PutCommand({
+      TableName: tableName,
+      Item: newInvoice
+    })
+
+    await ddbDocClient.send(command)
+
+    return {
+      statusCode: 201,
+      body: JSON.stringify(newInvoice)
+    }
+  } catch (error) {
+    if (error instanceof ZodError) {
+      throw createError.BadRequest(error.message)
+    }
+    throw error
+  }
+}
+
+export default postClientController
