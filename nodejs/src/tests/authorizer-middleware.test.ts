@@ -3,7 +3,7 @@ import middy from '@middy/core'
 import { type APIGatewayProxyEvent, type Context } from 'aws-lambda'
 import { describe, expect, it } from 'vitest'
 import httpErrorHandlerMiddleware from '@middy/http-error-handler'
-import { generateUserId } from './generate'
+import { generateName, generateUserId } from './generate'
 
 describe('Test authorizeUserMiddleware', () => {
   const event = {
@@ -27,6 +27,7 @@ describe('Test authorizeUserMiddleware', () => {
 
   it('should not throw an authorizer error', async () => {
     const userId = generateUserId()
+    const userName = generateName()
     const handler = middy()
       .use(httpErrorHandlerMiddleware())
       .use(authorizeUserMiddleware())
@@ -36,7 +37,8 @@ describe('Test authorizeUserMiddleware', () => {
         authorizer: {
           jwt: {
             claims: {
-              sub: userId
+              sub: userId,
+              name: userName
             }
           }
         }
