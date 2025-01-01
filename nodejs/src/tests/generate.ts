@@ -1,51 +1,34 @@
+import { CreateInvoice, Item } from '@/validation'
 import { faker } from '@faker-js/faker'
-import { Client, CreateClient, UpdateClient } from '../validation'
 
-export function generateClients(num: number): Client[] {
-  return Array(num)
-    .fill(0)
-    .map(() => {
-      return {
-        clientId: faker.string.uuid(),
-        clientName: faker.company.name(),
-        email: faker.internet.email(),
-        createdAt: faker.date.recent().toISOString(),
-        updatedAt: faker.date.recent().toISOString(),
-        userId: faker.string.uuid(),
-        currencyPreference: faker.finance.currencyCode(),
-        address: faker.location.streetAddress(),
-        phone: faker.phone.number(),
-        VATNumber: faker.string.uuid()
-      }
-    })
+export function generateCreateInvoice(): CreateInvoice {
+  return {
+    currency: maybe(faker.helpers.arrayElement(['USD', 'EUR', 'GBP'])),
+    taxPercentage: maybe(faker.number.int({ min: 0, max: 30 })),
+    items: generateItems(faker.number.int({ min: 1, max: 10 })),
+    clientId: faker.string.uuid(),
+    clientName: faker.company.name(),
+    invoiceDate: maybe(faker.date.recent().toISOString()),
+    invoiceDueDays: maybe(faker.number.int({ min: 1, max: 30 }))
+  }
 }
 
-export function generatePostClient(): CreateClient {
-  return {
-    clientName: faker.company.name(),
-    email: faker.internet.email(),
-    currencyPreference: faker.finance.currencyCode(),
-    address: faker.location.streetAddress(),
-    phone: faker.phone.number(),
-    VATNumber: faker.string.uuid()
-  }
+export function generateItems(num: number): Omit<Item, 'itemId'>[] {
+  return Array.from({ length: num }, () => ({
+    itemName: faker.commerce.productName(),
+    itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
+    itemQuantity: faker.number.int({ min: 1, max: 100 })
+  }))
 }
 
 export function generateUserId(): string {
   return faker.string.uuid()
 }
 
-export function generateUpdateClient(): UpdateClient {
-  return {
-    clientName: faker.company.name(),
-    email: faker.internet.email(),
-    currencyPreference: getValueOrUndefined(faker.finance.currencyCode()),
-    address: getValueOrUndefined(faker.location.streetAddress()),
-    phone: getValueOrUndefined(faker.phone.number()),
-    VATNumber: getValueOrUndefined(faker.string.uuid())
-  }
+export function generateName(): string {
+  return faker.company.name()
 }
 
-function getValueOrUndefined<T>(value: T): T | undefined {
+function maybe<T>(value: T): T | undefined {
   return Math.random() > 0.5 ? value : undefined
 }
