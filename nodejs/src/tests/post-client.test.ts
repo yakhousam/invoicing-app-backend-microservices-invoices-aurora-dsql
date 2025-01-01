@@ -113,6 +113,61 @@ describe('Test postInvoice', () => {
     )
   })
 
+  it.only('should increment invoice number', async () => {
+    const userId = generateUserId()
+    const userName = generateName()
+
+    const expectedInvoiceIdOne = `${dayjs().year()}-1`
+    const expectedInvoiceIdTwo = `${dayjs().year()}-2`
+
+    ddbMock
+      .on(PutCommand)
+      .resolves({})
+      .on(UpdateCommand)
+      .resolvesOnce({ Attributes: { invoiceNumber: 1 } })
+      .resolvesOnce({ Attributes: { invoiceNumber: 2 } })
+
+    const putEvent1 = {
+      ...event,
+      requestContext: {
+        authorizer: {
+          jwt: {
+            claims: {
+              sub: userId,
+              name: userName
+            }
+          }
+        }
+      },
+      body: JSON.stringify(generateCreateInvoice())
+    } as unknown as APIGatewayProxyEvent
+
+    const putEvent2 = {
+      ...event,
+      requestContext: {
+        authorizer: {
+          jwt: {
+            claims: {
+              sub: userId,
+              name: userName
+            }
+          }
+        }
+      },
+      body: JSON.stringify(generateCreateInvoice())
+    } as unknown as APIGatewayProxyEvent
+
+    const result1 = await postClientHandler(putEvent1, context)
+    expect(result1.statusCode).toBe(201)
+    const returnedBody1 = JSON.parse(result1.body) as Invoice
+    expect(returnedBody1.invoiceId).toBe(expectedInvoiceIdOne)
+
+    const result2 = await postClientHandler(putEvent2, context)
+    expect(result2.statusCode).toBe(201)
+    const returnedBody2 = JSON.parse(result2.body) as Invoice
+    expect(returnedBody2.invoiceId).toBe(expectedInvoiceIdTwo)
+  })
+
   describe('Validations', () => {
     it('should throw an error when clientId is not provided', async () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
