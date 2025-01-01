@@ -1,4 +1,5 @@
 import { ddbDocClient, tableName } from '@/db/client'
+import { invoiceSchema } from '@/validation'
 import { QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import createError from 'http-errors'
@@ -6,7 +7,9 @@ import createError from 'http-errors'
 const getAllInvoicesController = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
-  const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string
+  const userId = invoiceSchema.shape.userId.parse(
+    event.requestContext.authorizer?.jwt?.claims?.sub
+  )
 
   let lastEvaluatedKey: Record<string, unknown> | undefined = undefined
   const invoices: Record<string, unknown>[] = []
