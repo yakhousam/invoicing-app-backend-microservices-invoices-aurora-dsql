@@ -1,17 +1,18 @@
-import { Client } from '@/validation'
 import {
   DynamoDBDocumentClient,
   PutCommand,
-  QueryCommand
+  UpdateCommand
 } from '@aws-sdk/lib-dynamodb'
 import { type APIGatewayProxyEvent, type Context } from 'aws-lambda'
 import { mockClient } from 'aws-sdk-client-mock'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { type ZodIssue } from 'zod'
-import { handler as postClientHandler } from '../../functions/postClient'
-import { generatePostClient, generateUserId } from './generate'
+import { handler as postClientHandler } from '../../functions/postInvoice'
+import { generateName, generateCreateInvoice, generateUserId } from './generate'
+import { Invoice } from '@/validation'
+import dayjs from 'dayjs'
 
-describe('Test postClient', () => {
+describe('Test postInvoice', () => {
   const ddbMock = mockClient(DynamoDBDocumentClient)
 
   const event = {
@@ -30,31 +31,16 @@ describe('Test postClient', () => {
     ddbMock.reset()
   })
 
-  it('should post a client', async () => {
-    const client = generatePostClient()
+  it('should create an invoice', async () => {
     const userId = generateUserId()
+    const userName = generateName()
+
+    const createInvoiceData = generateCreateInvoice()
+    const expectedInvoiceId = `${dayjs().year()}-1`
 
     ddbMock
-      .on(QueryCommand, {
-        TableName: 'clients',
-        IndexName: 'emailIndex',
-        KeyConditionExpression: 'email = :email AND userId = :userId',
-        ExpressionAttributeValues: {
-          ':email': client.email,
-          ':userId': userId
-        }
-      })
-      .resolves({ Count: 0 })
-      .on(QueryCommand, {
-        TableName: 'clients',
-        IndexName: 'clientNameIndex',
-        KeyConditionExpression: 'clientName = :clientName AND userId = :userId',
-        ExpressionAttributeValues: {
-          ':clientName': client.clientName,
-          ':userId': userId
-        }
-      })
-      .resolves({ Count: 0 })
+      .on(UpdateCommand)
+      .resolves({ Attributes: { invoiceNumber: 1 } })
       .on(PutCommand)
       .resolves({})
 
@@ -64,125 +50,76 @@ describe('Test postClient', () => {
         authorizer: {
           jwt: {
             claims: {
-              sub: userId
+              sub: userId,
+              name: userName
             }
           }
         }
       },
-      body: JSON.stringify(client)
+      body: JSON.stringify(createInvoiceData)
     } as unknown as APIGatewayProxyEvent
 
     const result = await postClientHandler(putEvent, context)
-    const returnedBody = JSON.parse(result.body) as Client
-
     expect(result.statusCode).toBe(201)
-    expect(returnedBody).contains(client)
-    expect(returnedBody.clientId).toBeTruthy()
-    expect(returnedBody.createdAt).toBeTruthy()
-    expect(returnedBody.updatedAt).toBeTruthy()
+
+    const returnedBody = JSON.parse(result.body) as Invoice
+
+    expect(returnedBody.invoiceId).toBe(expectedInvoiceId)
+    expect(returnedBody.clientId).toBe(createInvoiceData.clientId)
+    expect(returnedBody.clientName).toBe(createInvoiceData.clientName)
     expect(returnedBody.userId).toBe(userId)
+    expect(returnedBody.userName).toBe(userName)
+    expect(returnedBody.currency).toBe(createInvoiceData.currency || 'USD')
+    expect(returnedBody.taxPercentage).toBe(
+      createInvoiceData.taxPercentage || 0
+    )
+    expect(returnedBody.paid).toBe(false)
+    expect(returnedBody.invoiceDueDays).toBe(
+      createInvoiceData.invoiceDueDays || 7
+    )
+    expect(returnedBody.items.length).toBe(createInvoiceData.items.length)
+    expect(returnedBody.createdAt).toBeDefined()
+    expect(returnedBody.updatedAt).toBeDefined()
+
+    const expectedInvoiceDate = createInvoiceData.invoiceDate
+      ? dayjs(createInvoiceData.invoiceDate).startOf('day').toISOString()
+      : dayjs().startOf('day').toISOString()
+
+    expect(dayjs(returnedBody.invoiceDate).startOf('day').toISOString()).toBe(
+      expectedInvoiceDate
+    )
+
+    expect(
+      returnedBody.items[Math.floor(Math.random() * returnedBody.items.length)]
+        .itemId
+    ).toBeDefined()
+
+    const expectedSubTotal = returnedBody.items.reduce(
+      (acc, item) =>
+        parseFloat((acc + item.itemPrice * item.itemQuantity).toFixed(2)),
+      0
+    )
+    expect(returnedBody.subTotal).toBe(expectedSubTotal)
+    expect(returnedBody.taxAmount).toBe(
+      parseFloat(
+        (
+          (expectedSubTotal * (createInvoiceData.taxPercentage || 0)) /
+          100
+        ).toFixed(2)
+      )
+    )
+    expect(returnedBody.totalAmount).toBe(
+      parseFloat((expectedSubTotal + returnedBody.taxAmount).toFixed(2))
+    )
   })
 
-  it('should return 409 if client name already exists', async () => {
-    const client = generatePostClient()
-    const userId = generateUserId()
-
-    ddbMock
-      .on(QueryCommand, {
-        TableName: 'clients',
-        IndexName: 'emailIndex',
-        KeyConditionExpression: 'email = :email AND userId = :userId',
-        ExpressionAttributeValues: {
-          ':email': client.email,
-          ':userId': userId
-        }
-      })
-      .resolves({ Count: 0 })
-      .on(QueryCommand, {
-        TableName: 'clients',
-        IndexName: 'clientNameIndex',
-        KeyConditionExpression: 'clientName = :clientName AND userId = :userId',
-        ExpressionAttributeValues: {
-          ':clientName': client.clientName,
-          ':userId': userId
-        }
-      })
-      .resolves({ Count: 1 })
-
-    const putEvent = {
-      ...event,
-      requestContext: {
-        authorizer: {
-          jwt: {
-            claims: {
-              sub: userId
-            }
-          }
-        }
-      },
-      body: JSON.stringify(client)
-    } as unknown as APIGatewayProxyEvent
-
-    const result = await postClientHandler(putEvent, context)
-
-    expect(result.statusCode).toBe(409)
-    expect(result.body).toBe('Client name already exists')
-  })
-
-  it('should return 409 if email already exists', async () => {
-    const client = generatePostClient()
-    const userId = generateUserId()
-
-    ddbMock
-      .on(QueryCommand, {
-        TableName: 'clients',
-        IndexName: 'emailIndex',
-        KeyConditionExpression: 'email = :email AND userId = :userId',
-        ExpressionAttributeValues: {
-          ':email': client.email,
-          ':userId': userId
-        }
-      })
-      .resolves({ Count: 1 })
-
-    const putEvent = {
-      ...event,
-      requestContext: {
-        authorizer: {
-          jwt: {
-            claims: {
-              sub: userId
-            }
-          }
-        }
-      },
-      body: JSON.stringify(client)
-    } as unknown as APIGatewayProxyEvent
-
-    const result = await postClientHandler(putEvent, context)
-
-    expect(result.statusCode).toBe(409)
-    expect(result.body).toBe('Email already exists')
-  })
-
-  describe('Validation', () => {
-    beforeEach(() => {
-      ddbMock
-        .on(QueryCommand, {
-          TableName: 'clients',
-          IndexName: 'emailIndex'
-        })
-        .resolves({ Count: 0 })
-        .on(QueryCommand, {
-          TableName: 'clients',
-          IndexName: 'clientNameIndex'
-        })
-        .resolves({ Count: 0 })
-    })
-    it('should return 400 if client name is missing', async () => {
+  describe('Validations', () => {
+    it('should throw an error when clientId is not provided', async () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { clientName, ...client } = generatePostClient()
+      const { clientId, ...createInvoiceData } = generateCreateInvoice()
+
       const userId = generateUserId()
+      const userName = generateName()
 
       const putEvent = {
         ...event,
@@ -190,26 +127,55 @@ describe('Test postClient', () => {
           authorizer: {
             jwt: {
               claims: {
-                sub: userId
+                sub: userId,
+                name: userName
               }
             }
           }
         },
-        body: JSON.stringify(client)
+        body: JSON.stringify(createInvoiceData)
       } as unknown as APIGatewayProxyEvent
 
       const result = await postClientHandler(putEvent, context)
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-
       expect(result.statusCode).toBe(400)
+      const returnedBody = JSON.parse(result.body) as ZodIssue[]
+      expect(returnedBody[0].path).toContain('clientId')
+    })
+
+    it('should throw an error when clientName is not provided', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { clientName, ...createInvoiceData } = generateCreateInvoice()
+
+      const userId = generateUserId()
+      const userName = generateName()
+
+      const putEvent = {
+        ...event,
+        requestContext: {
+          authorizer: {
+            jwt: {
+              claims: {
+                sub: userId,
+                name: userName
+              }
+            }
+          }
+        },
+        body: JSON.stringify(createInvoiceData)
+      } as unknown as APIGatewayProxyEvent
+
+      const result = await postClientHandler(putEvent, context)
+      expect(result.statusCode).toBe(400)
+      const returnedBody = JSON.parse(result.body) as ZodIssue[]
       expect(returnedBody[0].path).toContain('clientName')
-      expect(returnedBody[0].message).toBeTruthy()
     })
 
-    it('should return 400 if client name is empty', async () => {
+    it('should throw an error when items is not provided', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { items, ...createInvoiceData } = generateCreateInvoice()
+
       const userId = generateUserId()
-      const client = generatePostClient()
-      client.clientName = ''
+      const userName = generateName()
 
       const putEvent = {
         ...event,
@@ -217,74 +183,19 @@ describe('Test postClient', () => {
           authorizer: {
             jwt: {
               claims: {
-                sub: userId
+                sub: userId,
+                name: userName
               }
             }
           }
         },
-        body: JSON.stringify(client)
+        body: JSON.stringify(createInvoiceData)
       } as unknown as APIGatewayProxyEvent
 
       const result = await postClientHandler(putEvent, context)
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-
       expect(result.statusCode).toBe(400)
-      expect(returnedBody[0].path).toContain('clientName')
-      expect(returnedBody[0].message).toBeTruthy()
-    })
-
-    it('should return 400 if email is invalid', async () => {
-      const userId = generateUserId()
-      const client = generatePostClient()
-      client.email = 'invalid-email'
-
-      const putEvent = {
-        ...event,
-        requestContext: {
-          authorizer: {
-            jwt: {
-              claims: {
-                sub: userId
-              }
-            }
-          }
-        },
-        body: JSON.stringify(client)
-      } as unknown as APIGatewayProxyEvent
-
-      const result = await postClientHandler(putEvent, context)
       const returnedBody = JSON.parse(result.body) as ZodIssue[]
-
-      expect(result.statusCode).toBe(400)
-      expect(returnedBody[0].path).toContain('email')
-      expect(returnedBody[0].message).toBeTruthy()
-    })
-
-    it('should return 400 if phone is invalid', async () => {
-      const userId = generateUserId()
-      const client = generatePostClient()
-      client.phone = '123'
-
-      const putEvent = {
-        ...event,
-        requestContext: {
-          authorizer: {
-            jwt: {
-              claims: {
-                sub: userId
-              }
-            }
-          }
-        },
-        body: JSON.stringify(client)
-      } as unknown as APIGatewayProxyEvent
-
-      const result = await postClientHandler(putEvent, context)
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-
-      expect(result.statusCode).toBe(400)
-      expect(returnedBody[0].path).toContain('phone')
-      expect(returnedBody[0].message).toBeTruthy()
+      expect(returnedBody[0].path).toContain('items')
     })
   })
 })
