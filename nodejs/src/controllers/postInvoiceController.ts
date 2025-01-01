@@ -45,14 +45,14 @@ const postClientController = async (
     const newInvoiceNumber = `${currentYear}-${incrementalNumber}`
 
     const subTotal = validateBody.items.reduce((acc, item) => {
-      return acc + item.itemPrice * item.itemQuantity
+      return parseFloat((acc + item.itemPrice * item.itemQuantity).toFixed(2))
     }, 0)
 
     const taxAmount =
       validateBody.taxPercentage > 0
-        ? subTotal * (validateBody.taxPercentage / 100)
+        ? parseFloat((subTotal * (validateBody.taxPercentage / 100)).toFixed(2))
         : 0
-    const totalAmount = subTotal + taxAmount
+    const totalAmount = parseFloat((subTotal + taxAmount).toFixed(2))
 
     const newInvoice: Omit<Invoice, 'status'> = {
       // status should be returned by the API but not saved in the database

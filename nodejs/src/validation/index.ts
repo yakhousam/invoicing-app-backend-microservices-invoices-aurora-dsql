@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const itemSchema = z.object({
+export const itemSchema = z.object({
   itemId: z.string(),
   itemName: z
     .string()
@@ -79,6 +79,8 @@ export const invoicesTotalsByMonthSchema = z.array(
 )
 
 export type Invoice = z.infer<typeof invoiceSchema>
+
+export type Item = z.infer<typeof itemSchema>
 
 export type CreateInvoice = z.input<typeof createInvoiceSchema>
 
