@@ -93,30 +93,30 @@ Resources:
         EntryPoints:
           - functions/postInvoice.ts
 
-  # getAllClientsFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri: nodejs
-  #     Handler: getAllClients.handler
-  #     Policies:
-  #       - DynamoDBWritePolicy:
-  #           TableName: !Ref Table
-  #     Events:
-  #       RootGet:
-  #         Type: HttpApi
-  #         Properties:
-  #           Path: /
-  #           Method: GET
-  #           ApiId: !Ref HttpApi
+  getAllInvoicesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: nodejs
+      Handler: getAllInvoices.handler
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref Table
+      Events:
+        RootGet:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: GET
+            ApiId: !Ref HttpApi
 
-  #   Metadata:
-  #     BuildMethod: esbuild
-  #     BuildProperties:
-  #       Minify: true
-  #       Target: 'es2020'
-  #       Sourcemap: true
-  #       EntryPoints:
-  #         - functions/getAllClients.ts
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+        EntryPoints:
+          - functions/getAllInvoices.ts
 
   # getClientByIdFunction:
   #   Type: AWS::Serverless::Function

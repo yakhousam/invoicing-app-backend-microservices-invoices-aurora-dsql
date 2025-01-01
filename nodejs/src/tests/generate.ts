@@ -1,11 +1,18 @@
-import { CreateInvoice, Item } from '@/validation'
+import { CreateInvoice, Invoice, Item } from '@/validation'
 import { faker } from '@faker-js/faker'
 
 export function generateCreateInvoice(): CreateInvoice {
   return {
     currency: maybe(faker.helpers.arrayElement(['USD', 'EUR', 'GBP'])),
     taxPercentage: maybe(faker.number.int({ min: 0, max: 30 })),
-    items: generateItems(faker.number.int({ min: 1, max: 10 })),
+    items: Array.from(
+      { length: faker.number.int({ min: 1, max: 10 }) },
+      () => ({
+        itemName: faker.commerce.productName(),
+        itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
+        itemQuantity: faker.number.int({ min: 1, max: 100 })
+      })
+    ),
     clientId: faker.string.uuid(),
     clientName: faker.company.name(),
     invoiceDate: maybe(faker.date.recent().toISOString()),
@@ -13,11 +20,39 @@ export function generateCreateInvoice(): CreateInvoice {
   }
 }
 
-export function generateItems(num: number): Omit<Item, 'itemId'>[] {
+export function generateInvoices(
+  num: number,
+  userId: string,
+  userName: string
+): Invoice[] {
+  const items: Item[] = Array.from(
+    { length: faker.number.int({ min: 1, max: 10 }) },
+    () => ({
+      itemId: faker.string.uuid(),
+      itemName: faker.commerce.productName(),
+      itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
+      itemQuantity: faker.number.int({ min: 1, max: 100 })
+    })
+  )
+
   return Array.from({ length: num }, () => ({
-    itemName: faker.commerce.productName(),
-    itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
-    itemQuantity: faker.number.int({ min: 1, max: 100 })
+    invoiceId: faker.string.uuid(),
+    currency: faker.helpers.arrayElement(['USD', 'EUR', 'GBP']),
+    taxPercentage: faker.number.int({ min: 0, max: 30 }),
+    items,
+    clientId: faker.string.uuid(),
+    clientName: faker.company.name(),
+    userId,
+    userName,
+    invoiceDate: faker.date.recent().toISOString(),
+    invoiceDueDays: faker.number.int({ min: 1, max: 30 }),
+    status: faker.helpers.arrayElement(['paid', 'sent', 'overdue']),
+    paid: faker.datatype.boolean(),
+    subTotal: faker.number.float({ min: 0, max: 10000, fractionDigits: 2 }),
+    taxAmount: faker.number.float({ min: 0, max: 3000, fractionDigits: 2 }),
+    totalAmount: faker.number.float({ min: 0, max: 13000, fractionDigits: 2 }),
+    createdAt: faker.date.past().toISOString(),
+    updatedAt: faker.date.recent().toISOString()
   }))
 }
 
