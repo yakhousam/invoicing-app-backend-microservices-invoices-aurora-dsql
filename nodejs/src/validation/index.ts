@@ -2,7 +2,9 @@ import { z } from 'zod'
 
 const itemSchema = z.object({
   itemId: z.string(),
-  itemName: z.string().min(1, 'item description must be at least 1 character'),
+  itemName: z
+    .string()
+    .nonempty('item description must be at least 1 character'),
   itemPrice: z.coerce.number().positive('item price must be a positive number'),
   itemQuantity: z.coerce
     .number()
@@ -17,15 +19,15 @@ export const invoiceSchema = z.object({
   invoiceDueDays: z.number().default(7),
   userId: z
     .string({ message: 'User ID is required' })
-    .min(1, 'userId must not be empty'),
+    .nonempty('User ID must not be empty'),
   userName: z
     .string({ message: 'User name is required' })
-    .min(1, 'userName must not be empty'),
+    .nonempty('User name must not be empty'),
   clientId: z.string(),
   clientName: z.string().nonempty(),
   items: z.array(itemSchema),
   paid: z.boolean().default(false),
-  status: z.enum(['sent', 'paid', 'overdue']).default('sent'),
+  status: z.enum(['sent', 'paid', 'overdue']),
   currency: z.enum(['USD', 'EUR', 'GBP']).default('USD'),
   taxPercentage: z.number().min(0).max(100).default(0),
   subTotal: z.number(),
@@ -44,7 +46,8 @@ export const createInvoiceSchema = invoiceSchema
     updatedAt: true,
     totalAmount: true,
     subTotal: true,
-    taxAmount: true
+    taxAmount: true,
+    status: true
   })
   .extend({
     items: z.array(itemSchema.omit({ itemId: true }))

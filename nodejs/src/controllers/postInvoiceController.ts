@@ -44,14 +44,6 @@ const postClientController = async (
     // Format the invoice number as "currentYear-incNumber"
     const newInvoiceNumber = `${currentYear}-${incrementalNumber}`
 
-    const invoiceStatus: Invoice['status'] = validateBody.invoiceDate
-      ? dayjs(validateBody.invoiceDate).isBefore(
-          dayjs().subtract(validateBody.invoiceDueDays, 'day')
-        )
-        ? 'overdue'
-        : 'sent'
-      : 'sent'
-
     const subTotal = validateBody.items.reduce((acc, item) => {
       return acc + item.itemPrice * item.itemQuantity
     }, 0)
@@ -62,7 +54,8 @@ const postClientController = async (
         : 0
     const totalAmount = subTotal + taxAmount
 
-    const newInvoice: Invoice = {
+    const newInvoice: Omit<Invoice, 'status'> = {
+      // status should be returned by the API but not saved in the database
       ...validateBody,
       invoiceId: newInvoiceNumber,
       userId,
@@ -75,8 +68,7 @@ const postClientController = async (
       })),
       taxAmount,
       subTotal,
-      totalAmount,
-      status: invoiceStatus
+      totalAmount
     }
 
     const command = new PutCommand({
