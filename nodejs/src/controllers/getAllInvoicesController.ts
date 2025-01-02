@@ -1,5 +1,6 @@
 import { ddbDocClient, tableName } from '@/db/client'
-import { invoiceSchema } from '@/validation'
+import { addStatusToInvoice } from '@/utils'
+import { Invoice, invoiceSchema } from '@/validation'
 import { QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import createError from 'http-errors'
@@ -12,7 +13,7 @@ const getAllInvoicesController = async (
   )
 
   let lastEvaluatedKey: Record<string, unknown> | undefined = undefined
-  const invoices: Record<string, unknown>[] = []
+  const invoices: Invoice[] = []
 
   do {
     const command: QueryCommand = new QueryCommand({
@@ -24,10 +25,12 @@ const getAllInvoicesController = async (
       }
     })
     const data = await ddbDocClient.send(command)
-    if (data.Items) {
-      const filteredItems = data.Items.filter(
-        (item) => !item.invoiceId.startsWith('counter')
-      )
+    const items = data.Items as Omit<Invoice, 'status'>[]
+    if (items) {
+      const filteredItems: Invoice[] = items
+        .filter((item) => !item.invoiceId.startsWith('counter'))
+        .map(addStatusToInvoice)
+
       invoices.push(...filteredItems)
     }
     lastEvaluatedKey = data.LastEvaluatedKey
@@ -37,8 +40,10 @@ const getAllInvoicesController = async (
     throw new createError.NotFound('No invoice found')
   }
 
+  const parsedInvoices = invoiceSchema.array().parse(invoices)
+
   const response = {
-    invoices: invoices,
+    invoices: parsedInvoices,
     count: invoices.length
   }
   return {

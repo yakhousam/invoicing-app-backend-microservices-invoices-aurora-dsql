@@ -4,6 +4,7 @@ import { mockClient } from 'aws-sdk-client-mock'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { handler as getAllInvoicesHandler } from '../../functions/getAllInvoices'
 import { generateUserId, generateInvoices } from './generate'
+import { Invoice } from '@/validation'
 
 describe('Test getAllInvoices', () => {
   const ddbMock = mockClient(DynamoDBDocumentClient)
@@ -59,9 +60,11 @@ describe('Test getAllInvoices', () => {
     const result = await getAllInvoicesHandler(getAllInvoicesEvent, context)
 
     expect(result.statusCode).toBe(200)
-    expect(result.body).toEqual(
-      JSON.stringify({ invoices, count: invoices.length })
-    )
+    const returnedBody = JSON.parse(result.body) as {
+      invoices: Invoice[]
+      count: number
+    }
+    expect(returnedBody.count).toEqual(invoices.length)
   })
 
   it('should return 404 if no invoices are found', async () => {
@@ -99,9 +102,9 @@ describe('Test getAllInvoices', () => {
   it('should handle pagination correctly', async () => {
     const userId = generateUserId()
     const userName = 'Test User'
-    const invoices = generateInvoices(2, userId, userName)
-    const firstPage = invoices.slice(0, 1)
-    const secondPage = invoices.slice(1)
+    const invoices = generateInvoices(20, userId, userName)
+    const firstPage = invoices.slice(0, 10)
+    const secondPage = invoices.slice(10)
     const lastEvaluatedKey = { userId: '10' }
 
     ddbMock
@@ -138,9 +141,50 @@ describe('Test getAllInvoices', () => {
 
     const result = await getAllInvoicesHandler(getAllInvoicesEvent, context)
     expect(result.statusCode).toBe(200)
-    expect(result.body).toEqual(
-      JSON.stringify({ invoices: invoices, count: invoices.length })
-    )
+    const returnedBody = JSON.parse(result.body) as {
+      invoices: Invoice[]
+      count: number
+    }
+    expect(returnedBody.count).toEqual(invoices.length)
+  })
+
+  it('should add the invoice status to the response', async () => {
+    const userId = generateUserId()
+    const userName = 'Test User'
+    const invoices = generateInvoices(10, userId, userName)
+
+    ddbMock
+      .on(QueryCommand)
+      .resolves({ Items: undefined })
+      .on(QueryCommand, {
+        KeyConditionExpression: 'userId = :userId',
+        ExpressionAttributeValues: {
+          ':userId': userId
+        }
+      })
+      .resolves({ Items: invoices })
+
+    const getAllInvoicesEvent = {
+      ...event,
+      requestContext: {
+        authorizer: {
+          jwt: {
+            claims: {
+              sub: userId
+            }
+          }
+        }
+      }
+    } as unknown as APIGatewayProxyEvent
+
+    const result = await getAllInvoicesHandler(getAllInvoicesEvent, context)
+
+    expect(result.statusCode).toBe(200)
+    const returnedBody = JSON.parse(result.body) as {
+      invoices: Invoice[]
+      count: number
+    }
+    expect(returnedBody.invoices[0].status).toBeDefined()
   })
 
   it('should return 500 on DynamoDB error', async () => {
