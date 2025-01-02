@@ -1,5 +1,20 @@
 import { z } from 'zod'
 
+const dateToZodDate = z.preprocess(
+  (val: unknown) => {
+    if (val instanceof Date) {
+      return val.toISOString()
+    }
+    if (val === undefined) {
+      return new Date().toISOString()
+    }
+    return val
+  },
+  z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: 'Invalid date format'
+  })
+)
+
 export const itemSchema = z.object({
   itemId: z.string(),
   itemName: z
@@ -15,8 +30,8 @@ export const itemSchema = z.object({
 
 export const invoiceSchema = z.object({
   invoiceId: z.string(),
-  invoiceDate: z.string().default(new Date().toISOString()),
-  invoiceDueDays: z.number().default(7),
+  invoiceDate: dateToZodDate,
+  invoiceDueDays: z.number().max(30).default(7),
   userId: z
     .string({ message: 'User ID is required' })
     .nonempty('User ID must not be empty'),
@@ -25,7 +40,7 @@ export const invoiceSchema = z.object({
     .nonempty('User name must not be empty'),
   clientId: z.string(),
   clientName: z.string().nonempty(),
-  items: z.array(itemSchema),
+  items: z.array(itemSchema).nonempty('Items array must not be empty'),
   paid: z.boolean().default(false),
   status: z.enum(['sent', 'paid', 'overdue']),
   currency: z.enum(['USD', 'EUR', 'GBP']).default('USD'),
@@ -33,8 +48,8 @@ export const invoiceSchema = z.object({
   subTotal: z.number(),
   taxAmount: z.number(),
   totalAmount: z.number(),
-  createdAt: z.string(),
-  updatedAt: z.string()
+  createdAt: dateToZodDate,
+  updatedAt: dateToZodDate
 })
 
 export const createInvoiceSchema = invoiceSchema
@@ -50,33 +65,18 @@ export const createInvoiceSchema = invoiceSchema
     status: true
   })
   .extend({
-    items: z.array(itemSchema.omit({ itemId: true }))
+    items: z
+      .array(itemSchema.omit({ itemId: true }))
+      .nonempty('Items array must not be empty')
   })
 
-export const updateInvoice = createInvoiceSchema
+export const updateInvoiceSchema = createInvoiceSchema
   .omit({ clientId: true, clientName: true })
   .partial()
-
-export const invoicesSummarySchema = z.array(
-  z.object({
-    currency: createInvoiceSchema.shape.currency,
-    total: z.number(),
-    paid: z.number(),
-    unpaid: z.number()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field must be updated',
+    path: ['updates']
   })
-)
-
-export const invoicesTotalsByMonthSchema = z.array(
-  z.object({
-    date: z.object({
-      month: z.number(),
-      year: z.number()
-    }),
-    total: z.number(),
-    paid: z.number(),
-    unpaid: z.number()
-  })
-)
 
 export type Invoice = z.infer<typeof invoiceSchema>
 
@@ -84,8 +84,4 @@ export type Item = z.infer<typeof itemSchema>
 
 export type CreateInvoice = z.input<typeof createInvoiceSchema>
 
-export type UpdateInvoice = z.infer<typeof updateInvoice>
-
-export type invoicesSummary = z.infer<typeof invoicesSummarySchema>
-
-export type invoicesTotalsByMonth = z.infer<typeof invoicesTotalsByMonthSchema>
+export type UpdateInvoice = z.infer<typeof updateInvoiceSchema>
