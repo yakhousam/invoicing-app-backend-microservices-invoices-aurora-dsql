@@ -143,26 +143,26 @@ Resources:
         EntryPoints:
           - functions/getInvoiceById.ts
 
-  # updateClientFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri: nodejs
-  #     Handler: updateClient.handler
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref Table
-  #     Events:
-  #       RootGet:
-  #         Type: HttpApi
-  #         Properties:
-  #           Path: /{clientId}
-  #           Method: PATCH
-  #           ApiId: !Ref HttpApi
-  #   Metadata:
-  #     BuildMethod: esbuild
-  #     BuildProperties:
-  #       Minify: true
-  #       Target: 'es2020'
-  #       Sourcemap: true
-  #       EntryPoints:
-  #         - functions/updateClient.ts
+  updateInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: nodejs
+      Handler: updateInvoice.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Table
+      Events:
+        RootGet:
+          Type: HttpApi
+          Properties:
+            Path: /{invoiceId}
+            Method: PATCH
+            ApiId: !Ref HttpApi
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+        EntryPoints:
+          - functions/updateInvoice.ts
