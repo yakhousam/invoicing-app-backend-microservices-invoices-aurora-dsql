@@ -65,7 +65,20 @@ const postClientController = async (
       items: validateBody.items.map((item) => ({
         ...item,
         itemId: crypto.randomUUID()
-      })),
+      })) as [
+        {
+          itemId: string
+          itemName: string
+          itemPrice: number
+          itemQuantity: number
+        },
+        ...{
+          itemId: string
+          itemName: string
+          itemPrice: number
+          itemQuantity: number
+        }[]
+      ],
       taxAmount,
       subTotal,
       totalAmount
