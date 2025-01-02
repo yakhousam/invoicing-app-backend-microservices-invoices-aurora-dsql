@@ -1,5 +1,6 @@
 import { ddbDocClient, tableName } from '@/db/client'
-import { invoiceSchema } from '@/validation'
+import { addStatusToInvoice } from '@/utils'
+import { Invoice, invoiceSchema } from '@/validation'
 import { GetCommand } from '@aws-sdk/lib-dynamodb'
 import {
   type APIGatewayProxyEvent,
@@ -29,17 +30,22 @@ const getInvoiceByIdController = async (
   })
 
   const data = await ddbDocClient.send(command)
-  const item = data.Item
+  const item = data.Item as Omit<Invoice, 'status'>
 
   if (!item) {
     throw new createError.NotFound(
       `Invoice with invoiceId "${invoiceId}" not found`
     )
   }
+  console.log('item befor parse paid', item.paid, typeof item.paid)
+  const itemWithStatus = addStatusToInvoice(item)
+  console.log('invoice paid', itemWithStatus.paid, typeof itemWithStatus.paid)
+
+  const parsedItem = invoiceSchema.parse(itemWithStatus)
 
   return {
     statusCode: 200,
-    body: JSON.stringify(item)
+    body: JSON.stringify(parsedItem)
   }
 }
 

@@ -1,9 +1,11 @@
+import { Invoice } from '@/validation'
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb'
-import { type Context, type APIGatewayProxyEvent } from 'aws-lambda'
+import { type APIGatewayProxyEvent, type Context } from 'aws-lambda'
 import { mockClient } from 'aws-sdk-client-mock'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { handler as getInvoiceByIdHandler } from '../../functions/getInvoiceById'
-import { generateInvoices } from './generate'
+import { generateInvoices, generateName, generateUserId } from './generate'
+import { addStatusToInvoice } from '@/utils'
 
 describe('Test getinvoiceById', () => {
   const ddbMock = mockClient(DynamoDBDocumentClient)
@@ -33,7 +35,10 @@ describe('Test getinvoiceById', () => {
   })
 
   it('should return a invoice by id', async () => {
-    const invoice = generateInvoices(1, '123', 'Test user')[0]
+    const userId = generateUserId()
+    const userName = generateName()
+    const invoice = generateInvoices(1, userId, userName)[0]
+
     ddbMock
       .on(GetCommand)
       .resolves({
@@ -48,6 +53,52 @@ describe('Test getinvoiceById', () => {
       .resolves({
         Item: invoice
       })
+
+    const getInvoiceEvent = {
+      ...event,
+      pathParameters: {
+        invoiceId: invoice.invoiceId
+      },
+      requestContext: {
+        authorizer: {
+          jwt: {
+            claims: {
+              sub: invoice.userId
+            }
+          }
+        }
+      }
+    } as unknown as APIGatewayProxyEvent
+
+    const result = await getInvoiceByIdHandler(getInvoiceEvent, context)
+    expect(result.statusCode).toBe(200)
+
+    const returnedInvoice = JSON.parse(result.body) as Invoice
+    const { status, ...body } = returnedInvoice
+    expect(body).toEqual(invoice)
+    expect(status).toBeDefined()
+  })
+
+  it('should set the correct status for the invoice', async () => {
+    const invoice = generateInvoices(1, '123', 'Test user')[0]
+
+    const expectedStatus = addStatusToInvoice(invoice).status
+
+    ddbMock
+      .on(GetCommand)
+      .resolves({
+        Item: undefined
+      })
+      .on(GetCommand, {
+        Key: {
+          invoiceId: invoice.invoiceId,
+          userId: invoice.userId
+        }
+      })
+      .resolves({
+        Item: invoice
+      })
+
     const getInvoiceEvent = {
       ...event,
       pathParameters: {
@@ -66,8 +117,8 @@ describe('Test getinvoiceById', () => {
 
     const result = await getInvoiceByIdHandler(getInvoiceEvent, context)
 
-    expect(result.statusCode).toBe(200)
-    expect(result.body).toEqual(JSON.stringify(invoice))
+    const returnedInvoice = JSON.parse(result.body) as Invoice
+    expect(returnedInvoice.status).toBe(expectedStatus)
   })
 
   it('should return 401 if user is not authorized', async () => {
