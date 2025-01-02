@@ -1,3 +1,4 @@
+import { Invoice } from '@/validation'
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -5,12 +6,11 @@ import {
 } from '@aws-sdk/lib-dynamodb'
 import { type APIGatewayProxyEvent, type Context } from 'aws-lambda'
 import { mockClient } from 'aws-sdk-client-mock'
+import dayjs from 'dayjs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { type ZodIssue } from 'zod'
 import { handler as postClientHandler } from '../../functions/postInvoice'
-import { generateName, generateCreateInvoice, generateUserId } from './generate'
-import { Invoice } from '@/validation'
-import dayjs from 'dayjs'
+import { generateCreateInvoice, generateName, generateUserId } from './generate'
 
 describe('Test postInvoice', () => {
   const ddbMock = mockClient(DynamoDBDocumentClient)
@@ -82,7 +82,9 @@ describe('Test postInvoice', () => {
     expect(returnedBody.updatedAt).toBeDefined()
 
     const expectedInvoiceDate = createInvoiceData.invoiceDate
-      ? dayjs(createInvoiceData.invoiceDate).startOf('day').toISOString()
+      ? dayjs(String(createInvoiceData.invoiceDate))
+          .startOf('day')
+          .toISOString()
       : dayjs().startOf('day').toISOString()
 
     expect(dayjs(returnedBody.invoiceDate).startOf('day').toISOString()).toBe(
@@ -113,7 +115,7 @@ describe('Test postInvoice', () => {
     )
   })
 
-  it.only('should increment invoice number', async () => {
+  it('should increment invoice number', async () => {
     const userId = generateUserId()
     const userName = generateName()
 
@@ -251,6 +253,93 @@ describe('Test postInvoice', () => {
       expect(result.statusCode).toBe(400)
       const returnedBody = JSON.parse(result.body) as ZodIssue[]
       expect(returnedBody[0].path).toContain('items')
+    })
+
+    it('should throw an error when items is empty', async () => {
+      const createInvoiceData = generateCreateInvoice()
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { items, ...body } = createInvoiceData
+
+      const userId = generateUserId()
+      const userName = generateName()
+
+      const putEvent = {
+        ...event,
+        requestContext: {
+          authorizer: {
+            jwt: {
+              claims: {
+                sub: userId,
+                name: userName
+              }
+            }
+          }
+        },
+        body: JSON.stringify({ ...body, items: [] })
+      } as unknown as APIGatewayProxyEvent
+
+      const result = await postClientHandler(putEvent, context)
+      expect(result.statusCode).toBe(400)
+      const returnedBody = JSON.parse(result.body) as ZodIssue[]
+      expect(returnedBody[0].path).toContain('items')
+    })
+
+    it('should throw an error when itemPrice is not a number', async () => {
+      const createInvoiceData = generateCreateInvoice()
+      createInvoiceData.items[0].itemPrice = 'not a number' as unknown as number
+
+      const userId = generateUserId()
+      const userName = generateName()
+
+      const putEvent = {
+        ...event,
+        requestContext: {
+          authorizer: {
+            jwt: {
+              claims: {
+                sub: userId,
+                name: userName
+              }
+            }
+          }
+        },
+        body: JSON.stringify(createInvoiceData)
+      } as unknown as APIGatewayProxyEvent
+
+      const result = await postClientHandler(putEvent, context)
+      expect(result.statusCode).toBe(400)
+
+      const returnedBody = JSON.parse(result.body) as ZodIssue[]
+      expect(returnedBody[0].path).toContain('itemPrice')
+    })
+
+    it('should throw an error when invoiceDate is invalid', async () => {
+      const createInvoiceData = generateCreateInvoice()
+      createInvoiceData.invoiceDate = 'invalid date'
+
+      const userId = generateUserId()
+      const userName = generateName()
+
+      const putEvent = {
+        ...event,
+        requestContext: {
+          authorizer: {
+            jwt: {
+              claims: {
+                sub: userId,
+                name: userName
+              }
+            }
+          }
+        },
+        body: JSON.stringify(createInvoiceData)
+      } as unknown as APIGatewayProxyEvent
+
+      const result = await postClientHandler(putEvent, context)
+      expect(result.statusCode).toBe(400)
+
+      const returnedBody = JSON.parse(result.body) as ZodIssue[]
+      expect(returnedBody[0].path).toContain('invoiceDate')
     })
   })
 })
