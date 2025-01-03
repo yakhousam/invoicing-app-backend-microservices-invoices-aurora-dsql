@@ -119,6 +119,9 @@ describe('Test postInvoice', () => {
     const userId = generateUserId()
     const userName = generateName()
 
+    const generatedInvoice = generateCreateInvoice()
+    generatedInvoice.invoiceDate = dayjs().toISOString()
+
     const expectedInvoiceIdOne = `${dayjs().year()}-1`
     const expectedInvoiceIdTwo = `${dayjs().year()}-2`
 
