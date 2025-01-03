@@ -5,14 +5,7 @@ export function generateCreateInvoice(): CreateInvoice {
   return {
     currency: maybe(faker.helpers.arrayElement(['USD', 'EUR', 'GBP'])),
     taxPercentage: maybe(faker.number.int({ min: 0, max: 30 })),
-    items: Array.from(
-      { length: faker.number.int({ min: 1, max: 10 }) },
-      () => ({
-        itemName: faker.commerce.productName(),
-        itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
-        itemQuantity: faker.number.int({ min: 1, max: 100 })
-      })
-    ),
+    items: generateItems(faker.number.int({ min: 1, max: 10 })),
     clientId: faker.string.uuid(),
     clientName: faker.company.name(),
     invoiceDate: maybe(faker.date.recent().toISOString()),
@@ -25,21 +18,11 @@ export function generateInvoices(
   userId: string,
   userName: string
 ): Omit<Invoice, 'status'>[] {
-  const items: Item[] = Array.from(
-    { length: faker.number.int({ min: 1, max: 10 }) },
-    () => ({
-      itemId: faker.string.uuid(),
-      itemName: faker.commerce.productName(),
-      itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
-      itemQuantity: faker.number.int({ min: 1, max: 100 })
-    })
-  )
-
   return Array.from({ length: num }, () => ({
     invoiceId: faker.string.uuid(),
     currency: faker.helpers.arrayElement(['USD', 'EUR', 'GBP']),
     taxPercentage: faker.number.int({ min: 0, max: 30 }),
-    items,
+    items: generateItems(faker.number.int({ min: 1, max: 10 })),
     clientId: faker.string.uuid(),
     clientName: faker.company.name(),
     userId,
@@ -59,18 +42,23 @@ export function generateUpdateInvoice(): UpdateInvoice {
   return {
     currency: faker.helpers.arrayElement(['USD', 'EUR', 'GBP']),
     taxPercentage: faker.number.int({ min: 0, max: 30 }),
-    items: Array.from(
-      { length: faker.number.int({ min: 1, max: 10 }) },
-      () => ({
-        itemName: faker.commerce.productName(),
-        itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
-        itemQuantity: faker.number.int({ min: 1, max: 100 })
-      })
-    ),
+    items: generateItems(faker.number.int({ min: 1, max: 10 })),
     invoiceDate: maybe(faker.date.recent().toISOString()),
     invoiceDueDays: maybe(faker.number.int({ min: 1, max: 30 })),
     paid: true
   }
+}
+
+function generateItems(num: number) {
+  const items: Item[] = Array(num)
+    .fill(0)
+    .map(() => ({
+      itemId: faker.string.uuid(),
+      itemName: faker.commerce.productName(),
+      itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
+      itemQuantity: faker.number.int({ min: 1, max: 100 })
+    }))
+  return items as [Item, ...Item[]]
 }
 
 export function generateUserId(): string {

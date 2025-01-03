@@ -37,9 +37,7 @@ const getInvoiceByIdController = async (
       `Invoice with invoiceId "${invoiceId}" not found`
     )
   }
-  console.log('item befor parse paid', item.paid, typeof item.paid)
   const itemWithStatus = addStatusToInvoice(item)
-  console.log('invoice paid', itemWithStatus.paid, typeof itemWithStatus.paid)
 
   const parsedItem = invoiceSchema.parse(itemWithStatus)
 
