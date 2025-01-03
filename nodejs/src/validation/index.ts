@@ -1,18 +1,21 @@
+import dayjs from 'dayjs'
+import customParseFormat from 'dayjs/plugin/customParseFormat'
 import { z } from 'zod'
+
+dayjs.extend(customParseFormat)
 
 const dateToZodDate = z.preprocess(
   (val: unknown) => {
-    if (val instanceof Date) {
-      return val.toISOString()
-    }
     if (val === undefined) {
-      return new Date().toISOString()
+      return dayjs().toISOString()
     }
     return val
   },
-  z.string().refine((val) => !isNaN(Date.parse(val)), {
-    message: 'Invalid date format'
-  })
+  z
+    .string()
+    .refine((val) => dayjs(val, 'YYYY-MM-DDTHH:mm:ss.SSS[Z]', true).isValid(), {
+      message: 'Invalid date format, must be in ISO 8601 format'
+    })
 )
 
 export const itemSchema = z.object({
