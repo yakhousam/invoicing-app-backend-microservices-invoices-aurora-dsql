@@ -13,7 +13,9 @@ import httpJsonBodyParserMiddleware from '@middy/http-json-body-parser'
 import httpSecurityHeadersMiddleware from '@middy/http-security-headers'
 
 import postInvoiceController from '@/controllers/postInvoiceController'
+
 import authorizeUserMiddleware from '@/custom-middlewares/authorizeUserMiddleware'
+import customErrorMiddleware from '@/custom-middlewares/customErrorMiddleware'
 
 const postInvoiceHandler = async (
   event: APIGatewayProxyEvent
@@ -35,5 +37,6 @@ export const handler = middy({
   .use(httpContentEncodingMiddleware())
   .use(authorizeUserMiddleware())
   .use(httpErrorHandlerMiddleware())
+  .use(customErrorMiddleware())
   .use(errorLogger())
   .handler(postInvoiceHandler)

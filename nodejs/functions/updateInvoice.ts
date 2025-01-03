@@ -14,6 +14,7 @@ import httpSecurityHeadersMiddleware from '@middy/http-security-headers'
 
 import updateInvoiceController from '@/controllers/updateInvoiceController'
 import authorizeUserMiddleware from '@/custom-middlewares/authorizeUserMiddleware'
+import customErrorMiddleware from '@/custom-middlewares/customErrorMiddleware'
 
 const updateInvoiceHandler = async (
   event: APIGatewayProxyEvent
@@ -35,5 +36,6 @@ export const handler = middy({
   .use(httpContentEncodingMiddleware())
   .use(authorizeUserMiddleware())
   .use(httpErrorHandlerMiddleware())
+  .use(customErrorMiddleware())
   .use(errorLogger())
   .handler(updateInvoiceHandler)

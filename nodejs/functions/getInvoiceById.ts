@@ -12,6 +12,7 @@ import httpHeaderNormalizerMiddleware from '@middy/http-header-normalizer'
 import httpSecurityHeadersMiddleware from '@middy/http-security-headers'
 
 import authorizeUserMiddleware from '@/custom-middlewares/authorizeUserMiddleware'
+import customErrorMiddleware from '@/custom-middlewares/customErrorMiddleware'
 
 import getInvoiceByIdController from '@/controllers/getInvoiceByIdController'
 
@@ -32,7 +33,8 @@ export const handler = middy({
   .use(httpHeaderNormalizerMiddleware())
   .use(httpSecurityHeadersMiddleware())
   .use(httpContentEncodingMiddleware())
-  .use(httpErrorHandlerMiddleware())
   .use(authorizeUserMiddleware())
+  .use(httpErrorHandlerMiddleware())
+  .use(customErrorMiddleware())
   .use(errorLogger())
   .handler(getClientByIdHandler)
