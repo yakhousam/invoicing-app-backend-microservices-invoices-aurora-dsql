@@ -46,7 +46,10 @@ const postClientController = async (
     .parse(counterResult.Attributes?.invoiceNumber)
 
   // Format the invoice number as "invoiceYear-incNumber"
-  const newInvoiceNumber = `${invoiceYear}-${incrementalNumber}`
+  const newInvoiceNumber = `${invoiceYear}-${String(incrementalNumber).padStart(
+    3,
+    '0'
+  )}`
 
   const subTotal = validateBody.items.reduce((acc, item) => {
     return parseFloat((acc + item.itemPrice * item.itemQuantity).toFixed(2))
