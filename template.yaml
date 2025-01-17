@@ -46,6 +46,8 @@ Resources:
           - DELETE
         AllowOrigins:
           - "http://localhost:3001"
+          - "https://yakhousam-invoicing-app.netlify.app"
+          - "https://invoicing-app.khoudiryaya.dev"
         AllowHeaders:
           - Content-Type
           - Authorization

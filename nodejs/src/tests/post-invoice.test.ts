@@ -1,48 +1,51 @@
-import { Invoice } from '@/validation'
+import { Invoice } from "@/validation";
 import {
   DynamoDBDocumentClient,
   PutCommand,
-  UpdateCommand
-} from '@aws-sdk/lib-dynamodb'
-import { type APIGatewayProxyEvent, type Context } from 'aws-lambda'
-import { mockClient } from 'aws-sdk-client-mock'
-import dayjs from 'dayjs'
-import { beforeEach, describe, expect, it } from 'vitest'
-import { type ZodIssue } from 'zod'
-import { handler as postClientHandler } from '../../functions/postInvoice'
-import { generateCreateInvoice, generateName, generateUserId } from './generate'
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
+import { type APIGatewayProxyEvent, type Context } from "aws-lambda";
+import { mockClient } from "aws-sdk-client-mock";
+import dayjs from "dayjs";
+import { beforeEach, describe, expect, it } from "vitest";
+import { type ZodIssue } from "zod";
+import { handler as postClientHandler } from "../../functions/postInvoice";
+import {
+  generateCreateInvoice,
+  generateName,
+  generateUserId,
+} from "./generate";
 
-describe('Test postInvoice', () => {
-  const ddbMock = mockClient(DynamoDBDocumentClient)
+describe("Test postInvoice", () => {
+  const ddbMock = mockClient(DynamoDBDocumentClient);
 
   const event = {
-    httpMethod: 'POST',
+    httpMethod: "POST",
     headers: {
-      'cache-control': 'no-cache',
-      'content-type': 'application/json'
-    }
-  } as unknown as APIGatewayProxyEvent
+      "cache-control": "no-cache",
+      "content-type": "application/json",
+    },
+  } as unknown as APIGatewayProxyEvent;
 
   const context = {
-    getRemainingTimeInMillis: false
-  } as unknown as Context
+    getRemainingTimeInMillis: false,
+  } as unknown as Context;
 
   beforeEach(() => {
-    ddbMock.reset()
-  })
+    ddbMock.reset();
+  });
 
-  it('should create an invoice', async () => {
-    const userId = generateUserId()
-    const userName = generateName()
+  it("should create an invoice", async () => {
+    const userId = generateUserId();
 
-    const createInvoiceData = generateCreateInvoice()
-    const expectedInvoiceId = `${dayjs().year()}-1`
+    const createInvoiceData = generateCreateInvoice();
+    const expectedInvoiceId = `${dayjs().year()}-001`;
 
     ddbMock
       .on(UpdateCommand)
       .resolves({ Attributes: { invoiceNumber: 1 } })
       .on(PutCommand)
-      .resolves({})
+      .resolves({});
 
     const putEvent = {
       ...event,
@@ -51,57 +54,56 @@ describe('Test postInvoice', () => {
           jwt: {
             claims: {
               sub: userId,
-              name: userName
-            }
-          }
-        }
+            },
+          },
+        },
       },
-      body: JSON.stringify(createInvoiceData)
-    } as unknown as APIGatewayProxyEvent
+      body: JSON.stringify(createInvoiceData),
+    } as unknown as APIGatewayProxyEvent;
 
-    const result = await postClientHandler(putEvent, context)
-    expect(result.statusCode).toBe(201)
+    const result = await postClientHandler(putEvent, context);
+    expect(result.statusCode).toBe(201);
 
-    const returnedBody = JSON.parse(result.body) as Invoice
+    const returnedBody = JSON.parse(result.body) as Invoice;
 
-    expect(returnedBody.invoiceId).toBe(expectedInvoiceId)
-    expect(returnedBody.clientId).toBe(createInvoiceData.clientId)
-    expect(returnedBody.clientName).toBe(createInvoiceData.clientName)
-    expect(returnedBody.userId).toBe(userId)
-    expect(returnedBody.userName).toBe(userName)
-    expect(returnedBody.currency).toBe(createInvoiceData.currency || 'USD')
+    expect(returnedBody.invoiceId).toBe(expectedInvoiceId);
+    expect(returnedBody.clientId).toBe(createInvoiceData.clientId);
+    expect(returnedBody.clientName).toBe(createInvoiceData.clientName);
+    expect(returnedBody.userId).toBe(userId);
+    expect(returnedBody.userName).toBe(createInvoiceData.userName);
+    expect(returnedBody.currency).toBe(createInvoiceData.currency || "USD");
     expect(returnedBody.taxPercentage).toBe(
       createInvoiceData.taxPercentage || 0
-    )
-    expect(returnedBody.paid).toBe(false)
+    );
+    expect(returnedBody.paid).toBe(false);
     expect(returnedBody.invoiceDueDays).toBe(
       createInvoiceData.invoiceDueDays || 7
-    )
-    expect(returnedBody.items.length).toBe(createInvoiceData.items.length)
-    expect(returnedBody.createdAt).toBeDefined()
-    expect(returnedBody.updatedAt).toBeDefined()
+    );
+    expect(returnedBody.items.length).toBe(createInvoiceData.items.length);
+    expect(returnedBody.createdAt).toBeDefined();
+    expect(returnedBody.updatedAt).toBeDefined();
 
     const expectedInvoiceDate = createInvoiceData.invoiceDate
       ? dayjs(String(createInvoiceData.invoiceDate))
-          .startOf('day')
+          .startOf("day")
           .toISOString()
-      : dayjs().startOf('day').toISOString()
+      : dayjs().startOf("day").toISOString();
 
-    expect(dayjs(returnedBody.invoiceDate).startOf('day').toISOString()).toBe(
+    expect(dayjs(returnedBody.invoiceDate).startOf("day").toISOString()).toBe(
       expectedInvoiceDate
-    )
+    );
 
     expect(
       returnedBody.items[Math.floor(Math.random() * returnedBody.items.length)]
         .itemId
-    ).toBeDefined()
+    ).toBeDefined();
 
     const expectedSubTotal = returnedBody.items.reduce(
       (acc, item) =>
         parseFloat((acc + item.itemPrice * item.itemQuantity).toFixed(2)),
       0
-    )
-    expect(returnedBody.subTotal).toBe(expectedSubTotal)
+    );
+    expect(returnedBody.subTotal).toBe(expectedSubTotal);
     expect(returnedBody.taxAmount).toBe(
       parseFloat(
         (
@@ -109,28 +111,27 @@ describe('Test postInvoice', () => {
           100
         ).toFixed(2)
       )
-    )
+    );
     expect(returnedBody.totalAmount).toBe(
       parseFloat((expectedSubTotal + returnedBody.taxAmount).toFixed(2))
-    )
-  })
+    );
+  });
 
-  it('should increment invoice number', async () => {
-    const userId = generateUserId()
-    const userName = generateName()
+  it("should increment invoice number", async () => {
+    const userId = generateUserId();
 
-    const generatedInvoice = generateCreateInvoice()
-    generatedInvoice.invoiceDate = dayjs().toISOString()
+    const generatedInvoice = generateCreateInvoice();
+    generatedInvoice.invoiceDate = dayjs().toISOString();
 
-    const expectedInvoiceIdOne = `${dayjs().year()}-1`
-    const expectedInvoiceIdTwo = `${dayjs().year()}-2`
+    const expectedInvoiceIdOne = `${dayjs().year()}-001`;
+    const expectedInvoiceIdTwo = `${dayjs().year()}-002`;
 
     ddbMock
       .on(PutCommand)
       .resolves({})
       .on(UpdateCommand)
       .resolvesOnce({ Attributes: { invoiceNumber: 1 } })
-      .resolvesOnce({ Attributes: { invoiceNumber: 2 } })
+      .resolvesOnce({ Attributes: { invoiceNumber: 2 } });
 
     const putEvent1 = {
       ...event,
@@ -139,13 +140,12 @@ describe('Test postInvoice', () => {
           jwt: {
             claims: {
               sub: userId,
-              name: userName
-            }
-          }
-        }
+            },
+          },
+        },
       },
-      body: JSON.stringify(generateCreateInvoice())
-    } as unknown as APIGatewayProxyEvent
+      body: JSON.stringify(generateCreateInvoice()),
+    } as unknown as APIGatewayProxyEvent;
 
     const putEvent2 = {
       ...event,
@@ -154,32 +154,30 @@ describe('Test postInvoice', () => {
           jwt: {
             claims: {
               sub: userId,
-              name: userName
-            }
-          }
-        }
+            },
+          },
+        },
       },
-      body: JSON.stringify(generateCreateInvoice())
-    } as unknown as APIGatewayProxyEvent
+      body: JSON.stringify(generateCreateInvoice()),
+    } as unknown as APIGatewayProxyEvent;
 
-    const result1 = await postClientHandler(putEvent1, context)
-    expect(result1.statusCode).toBe(201)
-    const returnedBody1 = JSON.parse(result1.body) as Invoice
-    expect(returnedBody1.invoiceId).toBe(expectedInvoiceIdOne)
+    const result1 = await postClientHandler(putEvent1, context);
+    expect(result1.statusCode).toBe(201);
+    const returnedBody1 = JSON.parse(result1.body) as Invoice;
+    expect(returnedBody1.invoiceId).toBe(expectedInvoiceIdOne);
 
-    const result2 = await postClientHandler(putEvent2, context)
-    expect(result2.statusCode).toBe(201)
-    const returnedBody2 = JSON.parse(result2.body) as Invoice
-    expect(returnedBody2.invoiceId).toBe(expectedInvoiceIdTwo)
-  })
+    const result2 = await postClientHandler(putEvent2, context);
+    expect(result2.statusCode).toBe(201);
+    const returnedBody2 = JSON.parse(result2.body) as Invoice;
+    expect(returnedBody2.invoiceId).toBe(expectedInvoiceIdTwo);
+  });
 
-  describe('Validations', () => {
-    it('should throw an error when clientId is not provided', async () => {
+  describe("Validations", () => {
+    it("should throw an error when clientId is not provided", async () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { clientId, ...createInvoiceData } = generateCreateInvoice()
+      const { clientId, ...createInvoiceData } = generateCreateInvoice();
 
-      const userId = generateUserId()
-      const userName = generateName()
+      const userId = generateUserId();
 
       const putEvent = {
         ...event,
@@ -188,26 +186,25 @@ describe('Test postInvoice', () => {
             jwt: {
               claims: {
                 sub: userId,
-                name: userName
-              }
-            }
-          }
+              },
+            },
+          },
         },
-        body: JSON.stringify(createInvoiceData)
-      } as unknown as APIGatewayProxyEvent
+        body: JSON.stringify(createInvoiceData),
+      } as unknown as APIGatewayProxyEvent;
 
-      const result = await postClientHandler(putEvent, context)
-      expect(result.statusCode).toBe(400)
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-      expect(returnedBody[0].path).toContain('clientId')
-    })
+      const result = await postClientHandler(putEvent, context);
+      expect(result.statusCode).toBe(400);
+      const returnedBody = JSON.parse(result.body) as ZodIssue[];
+      expect(returnedBody[0].path).toContain("clientId");
+    });
 
-    it('should throw an error when clientName is not provided', async () => {
+    it("should throw an error when clientName is not provided", async () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { clientName, ...createInvoiceData } = generateCreateInvoice()
+      const { clientName, ...createInvoiceData } = generateCreateInvoice();
 
-      const userId = generateUserId()
-      const userName = generateName()
+      const userId = generateUserId();
+      const userName = generateName();
 
       const putEvent = {
         ...event,
@@ -216,26 +213,25 @@ describe('Test postInvoice', () => {
             jwt: {
               claims: {
                 sub: userId,
-                name: userName
-              }
-            }
-          }
+                name: userName,
+              },
+            },
+          },
         },
-        body: JSON.stringify(createInvoiceData)
-      } as unknown as APIGatewayProxyEvent
+        body: JSON.stringify(createInvoiceData),
+      } as unknown as APIGatewayProxyEvent;
 
-      const result = await postClientHandler(putEvent, context)
-      expect(result.statusCode).toBe(400)
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-      expect(returnedBody[0].path).toContain('clientName')
-    })
+      const result = await postClientHandler(putEvent, context);
+      expect(result.statusCode).toBe(400);
+      const returnedBody = JSON.parse(result.body) as ZodIssue[];
+      expect(returnedBody[0].path).toContain("clientName");
+    });
 
-    it('should throw an error when items is not provided', async () => {
+    it("should throw an error when items is not provided", async () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { items, ...createInvoiceData } = generateCreateInvoice()
+      const { items, ...createInvoiceData } = generateCreateInvoice();
 
-      const userId = generateUserId()
-      const userName = generateName()
+      const userId = generateUserId();
 
       const putEvent = {
         ...event,
@@ -244,55 +240,25 @@ describe('Test postInvoice', () => {
             jwt: {
               claims: {
                 sub: userId,
-                name: userName
-              }
-            }
-          }
+              },
+            },
+          },
         },
-        body: JSON.stringify(createInvoiceData)
-      } as unknown as APIGatewayProxyEvent
+        body: JSON.stringify(createInvoiceData),
+      } as unknown as APIGatewayProxyEvent;
 
-      const result = await postClientHandler(putEvent, context)
-      expect(result.statusCode).toBe(400)
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-      expect(returnedBody[0].path).toContain('items')
-    })
+      const result = await postClientHandler(putEvent, context);
+      expect(result.statusCode).toBe(400);
+      const returnedBody = JSON.parse(result.body) as ZodIssue[];
+      expect(returnedBody[0].path).toContain("items");
+    });
 
-    it('should throw an error when items is empty', async () => {
-      const createInvoiceData = generateCreateInvoice()
+    it("should throw an error when items is empty", async () => {
+      const createInvoiceData = generateCreateInvoice();
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { items, ...body } = createInvoiceData
+      const { items, ...body } = createInvoiceData;
 
-      const userId = generateUserId()
-      const userName = generateName()
-
-      const putEvent = {
-        ...event,
-        requestContext: {
-          authorizer: {
-            jwt: {
-              claims: {
-                sub: userId,
-                name: userName
-              }
-            }
-          }
-        },
-        body: JSON.stringify({ ...body, items: [] })
-      } as unknown as APIGatewayProxyEvent
-
-      const result = await postClientHandler(putEvent, context)
-      expect(result.statusCode).toBe(400)
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-      expect(returnedBody[0].path).toContain('items')
-    })
-
-    it('should throw an error when itemPrice is not a number', async () => {
-      const createInvoiceData = generateCreateInvoice()
-      createInvoiceData.items[0].itemPrice = 'not a number' as unknown as number
-
-      const userId = generateUserId()
-      const userName = generateName()
+      const userId = generateUserId();
 
       const putEvent = {
         ...event,
@@ -301,27 +267,26 @@ describe('Test postInvoice', () => {
             jwt: {
               claims: {
                 sub: userId,
-                name: userName
-              }
-            }
-          }
+              },
+            },
+          },
         },
-        body: JSON.stringify(createInvoiceData)
-      } as unknown as APIGatewayProxyEvent
+        body: JSON.stringify({ ...body, items: [] }),
+      } as unknown as APIGatewayProxyEvent;
 
-      const result = await postClientHandler(putEvent, context)
-      expect(result.statusCode).toBe(400)
+      const result = await postClientHandler(putEvent, context);
+      expect(result.statusCode).toBe(400);
+      const returnedBody = JSON.parse(result.body) as ZodIssue[];
+      expect(returnedBody[0].path).toContain("items");
+    });
 
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-      expect(returnedBody[0].path).toContain('itemPrice')
-    })
+    it("should throw an error when itemPrice is not a number", async () => {
+      const createInvoiceData = generateCreateInvoice();
+      createInvoiceData.items[0].itemPrice =
+        "not a number" as unknown as number;
 
-    it('should throw an error when invoiceDate is invalid', async () => {
-      const createInvoiceData = generateCreateInvoice()
-      createInvoiceData.invoiceDate = 'invalid date'
-
-      const userId = generateUserId()
-      const userName = generateName()
+      const userId = generateUserId();
+      const userName = generateName();
 
       const putEvent = {
         ...event,
@@ -330,19 +295,46 @@ describe('Test postInvoice', () => {
             jwt: {
               claims: {
                 sub: userId,
-                name: userName
-              }
-            }
-          }
+                name: userName,
+              },
+            },
+          },
         },
-        body: JSON.stringify(createInvoiceData)
-      } as unknown as APIGatewayProxyEvent
+        body: JSON.stringify(createInvoiceData),
+      } as unknown as APIGatewayProxyEvent;
 
-      const result = await postClientHandler(putEvent, context)
-      expect(result.statusCode).toBe(400)
+      const result = await postClientHandler(putEvent, context);
+      expect(result.statusCode).toBe(400);
 
-      const returnedBody = JSON.parse(result.body) as ZodIssue[]
-      expect(returnedBody[0].path).toContain('invoiceDate')
-    })
-  })
-})
+      const returnedBody = JSON.parse(result.body) as ZodIssue[];
+      expect(returnedBody[0].path).toContain("itemPrice");
+    });
+
+    it("should throw an error when invoiceDate is invalid", async () => {
+      const createInvoiceData = generateCreateInvoice();
+      createInvoiceData.invoiceDate = "invalid date";
+
+      const userId = generateUserId();
+
+      const putEvent = {
+        ...event,
+        requestContext: {
+          authorizer: {
+            jwt: {
+              claims: {
+                sub: userId,
+              },
+            },
+          },
+        },
+        body: JSON.stringify(createInvoiceData),
+      } as unknown as APIGatewayProxyEvent;
+
+      const result = await postClientHandler(putEvent, context);
+      expect(result.statusCode).toBe(400);
+
+      const returnedBody = JSON.parse(result.body) as ZodIssue[];
+      expect(returnedBody[0].path).toContain("invoiceDate");
+    });
+  });
+});
