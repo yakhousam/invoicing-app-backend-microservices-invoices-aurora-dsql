@@ -16,8 +16,7 @@ export function generateCreateInvoice(): CreateInvoice {
 
 export function generateInvoices(
   num: number,
-  userId: string,
-  userName: string
+  userId: string
 ): Omit<Invoice, "status">[] {
   return Array.from({ length: num }, () => ({
     invoiceId: faker.string.uuid(),
@@ -27,7 +26,7 @@ export function generateInvoices(
     clientId: faker.string.uuid(),
     clientName: faker.company.name(),
     userId,
-    userName,
+    userName: faker.company.name(),
     invoiceDate: faker.date.recent({ days: 30 }).toISOString(),
     invoiceDueDays: faker.number.int({ min: 1, max: 30 }),
     paid: false,

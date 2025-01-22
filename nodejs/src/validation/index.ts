@@ -77,7 +77,7 @@ export const createInvoiceSchema = invoiceSchema
   });
 
 export const updateInvoiceSchema = createInvoiceSchema
-  .omit({ clientId: true, clientName: true, userName: true, invoiceDate: true })
+  .omit({ clientId: true, clientName: true, userName: true })
   .partial()
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be updated",
