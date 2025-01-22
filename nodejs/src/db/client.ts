@@ -1,20 +1,18 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
-const ENDPOINT_OVERRIDE = process.env.ENDPOINT_OVERRIDE
-let ddbClient = undefined
+const ENDPOINT_OVERRIDE = process.env.ENDPOINT_OVERRIDE;
+let ddbClient = undefined;
 
 if (ENDPOINT_OVERRIDE) {
-  ddbClient = new DynamoDBClient({ endpoint: ENDPOINT_OVERRIDE })
+  ddbClient = new DynamoDBClient({ endpoint: ENDPOINT_OVERRIDE });
 } else {
-  ddbClient = new DynamoDBClient({}) // Use default values for DynamoDB endpoint
+  ddbClient = new DynamoDBClient({}); // Use default values for DynamoDB endpoint
 }
 
-const ddbDocClient = DynamoDBDocumentClient.from(ddbClient)
+const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
 
 // Get the DynamoDB table name from environment variables
-const tableName = process.env.TABLE_NAME || 'invoices'
-console.log(`Table name: ${tableName}`)
-console.log(`Endpoint override: ${ENDPOINT_OVERRIDE}`)
+const tableName = process.env.TABLE_NAME as string;
 
-export { ddbDocClient, tableName }
+export { ddbDocClient, tableName };

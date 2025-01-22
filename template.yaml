@@ -9,6 +9,10 @@ Parameters:
   UserPoolClientId:
     Type: String
     Description: Client ID for user pool
+  TableName:
+    Type: String
+    Description: Name of the DynamoDB table
+    Default: invoices
 
 Globals:
   Function:
@@ -19,7 +23,7 @@ Globals:
       - x86_64
     Environment:
       Variables:
-        TABLE_NAME: !Ref Table
+        TABLE_NAME: !Ref TableName
         ENDPOINT_OVERRIDE: ""
         userId: ""
         userName: ""
@@ -57,7 +61,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      TableName: invoices
+      TableName: !Ref TableName
       AttributeDefinitions:
         - AttributeType: S
           AttributeName: userId
@@ -199,3 +203,8 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - functions/deleteInvoice.ts
+
+Outputs:
+  HttpApi:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
