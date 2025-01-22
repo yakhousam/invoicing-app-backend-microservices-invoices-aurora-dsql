@@ -6,7 +6,7 @@ Parameters:
   UserPoolId:
     Type: String
     Description: User Pool ID for cognito provider
-  Audience:
+  UserPoolClientId:
     Type: String
     Description: Client ID for user pool
 
@@ -35,7 +35,7 @@ Resources:
             IdentitySource: "$request.header.Authorization"
             JwtConfiguration:
               audience:
-                - !Ref Audience
+                - !Ref UserPoolClientId
               issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}
       CorsConfiguration:
         AllowMethods:
