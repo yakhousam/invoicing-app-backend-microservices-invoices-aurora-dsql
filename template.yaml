@@ -207,4 +207,4 @@ Resources:
 Outputs:
   HttpApi:
     Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
