@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: invoices-microservice
+Description: invoices-microservice-aurora-dsql
 
 Parameters:
   UserPoolId:
@@ -9,10 +9,12 @@ Parameters:
   UserPoolClientId:
     Type: String
     Description: Client ID for user pool
-  TableName:
+  DsqlClusterUrl:
     Type: String
-    Description: Name of the DynamoDB table
-    Default: invoices
+    Description: URL for DSQL cluster
+  DsqlClusterArn:
+    Type: String
+    Description: ARN for DSQL cluster
 
 Globals:
   Function:
@@ -23,10 +25,10 @@ Globals:
       - x86_64
     Environment:
       Variables:
-        TABLE_NAME: !Ref TableName
-        ENDPOINT_OVERRIDE: ""
+        DSQL_CLUSTER_URL: !Ref DsqlClusterUrl
+        REGION: !Ref "AWS::Region"
         userId: ""
-        userName: ""
+        NODE_ENV: "production"
 
 Resources:
   HttpApi:
@@ -50,31 +52,9 @@ Resources:
           - DELETE
         AllowOrigins:
           - "http://localhost:3001"
-          - "https://yakhousam-invoicing-app.netlify.app"
-          - "https://invoicing-app.khoudiryaya.dev"
         AllowHeaders:
           - Content-Type
           - Authorization
-
-  Table:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      TableName: !Ref TableName
-      AttributeDefinitions:
-        - AttributeType: S
-          AttributeName: userId
-        - AttributeType: S
-          AttributeName: invoiceId
-      KeySchema:
-        - AttributeName: userId
-          KeyType: HASH
-        - AttributeName: invoiceId
-          KeyType: RANGE
-
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
 
   postInvoiceFunction:
     Type: AWS::Serverless::Function
@@ -82,8 +62,12 @@ Resources:
       CodeUri: nodejs
       Handler: postInvoice.handler
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref Table
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "dsql:DbConnectAdmin"
+              Resource: !Ref DsqlClusterArn
       Events:
         RootGet:
           Type: HttpApi
@@ -91,7 +75,6 @@ Resources:
             Path: /
             Method: POST
             ApiId: !Ref HttpApi
-
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
@@ -107,13 +90,12 @@ Resources:
       CodeUri: nodejs
       Handler: getAllInvoices.handler
       Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref Table
+        - AWSLambdaBasicExecutionRole
         - Statement:
-            Effect: Allow
-            Action:
-              - dynamodb:Query
-            Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action:
+                - "dsql:DbConnectAdmin"
+              Resource: !Ref DsqlClusterArn
       Events:
         RootGet:
           Type: HttpApi
@@ -121,7 +103,6 @@ Resources:
             Path: /
             Method: GET
             ApiId: !Ref HttpApi
-
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
@@ -137,8 +118,12 @@ Resources:
       CodeUri: nodejs
       Handler: getInvoiceById.handler
       Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref Table
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "dsql:DbConnectAdmin"
+              Resource: !Ref DsqlClusterArn
       Events:
         RootGet:
           Type: HttpApi
@@ -146,7 +131,6 @@ Resources:
             Path: /{invoiceId}
             Method: GET
             ApiId: !Ref HttpApi
-
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
@@ -162,8 +146,12 @@ Resources:
       CodeUri: nodejs
       Handler: updateInvoice.handler
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref Table
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "dsql:DbConnectAdmin"
+              Resource: !Ref DsqlClusterArn
       Events:
         RootGet:
           Type: HttpApi
@@ -186,8 +174,12 @@ Resources:
       CodeUri: nodejs
       Handler: deleteInvoice.handler
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref Table
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "dsql:DbConnectAdmin"
+              Resource: !Ref DsqlClusterArn
       Events:
         RootGet:
           Type: HttpApi
