@@ -1,18 +1,42 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { DsqlSigner } from "@aws-sdk/dsql-signer";
+import { Client } from "pg";
 
-const ENDPOINT_OVERRIDE = process.env.ENDPOINT_OVERRIDE;
-let ddbClient = undefined;
+const clusterEndpoint = process.env.DSQL_CLUSTER_URL!;
+const region = process.env.REGION!;
 
-if (ENDPOINT_OVERRIDE) {
-  ddbClient = new DynamoDBClient({ endpoint: ENDPOINT_OVERRIDE });
-} else {
-  ddbClient = new DynamoDBClient({}); // Use default values for DynamoDB endpoint
+async function getToken() {
+  // The token expiration time is optional, and the default value 900 seconds
+  const signer = new DsqlSigner({
+    hostname: clusterEndpoint,
+    region,
+  });
+  const token = await signer.getDbConnectAdminAuthToken();
+  return token;
 }
 
-const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
+let client: Client | null = null;
+let current = 0;
 
-// Get the DynamoDB table name from environment variables
-const tableName = process.env.TABLE_NAME as string;
+export async function getDatabaseClient() {
+  const diff = Date.now() - current;
+  if (client && diff < 850000) {
+    return client;
+  }
+  current = Date.now();
+  const token = await getToken();
+  client = new Client({
+    host: clusterEndpoint,
+    user: "admin",
+    password: token,
+    database: "postgres",
+    port: 5432,
+    ssl: true,
+  });
 
-export { ddbDocClient, tableName };
+  // Connect
+  await client.connect();
+  return client;
+}
+
+export const ddbDocClient = {};
+export const tableName = "invoices";
