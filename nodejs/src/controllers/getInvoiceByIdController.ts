@@ -1,50 +1,45 @@
-import { ddbDocClient, tableName } from '@/db/client'
-import { addStatusToInvoice } from '@/utils'
-import { Invoice, invoiceSchema } from '@/validation'
-import { GetCommand } from '@aws-sdk/lib-dynamodb'
+import { getDatabaseClient } from "@/db/client";
+import { addStatusToInvoice, getUserId } from "@/utils";
+import { type Invoice } from "@/validation";
 import {
   type APIGatewayProxyEvent,
-  type APIGatewayProxyResult
-} from 'aws-lambda'
-import createError from 'http-errors'
+  type APIGatewayProxyResult,
+} from "aws-lambda";
+import createError from "http-errors";
 
 const getInvoiceByIdController = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
-  const userId = invoiceSchema.shape.userId.parse(
-    event.requestContext.authorizer?.jwt?.claims?.sub
-  )
+  const userId = getUserId(event);
 
-  const invoiceId = event.pathParameters?.invoiceId
+  const invoiceId = event.pathParameters?.invoiceId;
 
   if (!invoiceId) {
-    throw new createError.BadRequest('invoiceId is required')
+    throw new createError.BadRequest("invoiceId is required");
   }
 
-  const command = new GetCommand({
-    TableName: tableName,
-    Key: {
-      invoiceId: invoiceId,
-      userId
-    }
-  })
+  const dbClient = await getDatabaseClient();
 
-  const data = await ddbDocClient.send(command)
-  const item = data.Item as Omit<Invoice, 'status'>
+  const result = await dbClient.query(
+    'SELECT * FROM invoicing_app.invoices WHERE "invoiceId" = $1 AND "userId" = $2',
+    [invoiceId, userId]
+  );
 
-  if (!item) {
+  const invoice = result.rows?.[0];
+
+  if (!invoice) {
     throw new createError.NotFound(
       `Invoice with invoiceId "${invoiceId}" not found`
-    )
+    );
   }
-  const itemWithStatus = addStatusToInvoice(item)
+  const itemWithStatus = addStatusToInvoice(invoice as Invoice);
 
-  const parsedItem = invoiceSchema.parse(itemWithStatus)
+  // const parsedItem = invoiceSchema.parse(itemWithStatus);
 
   return {
     statusCode: 200,
-    body: JSON.stringify(parsedItem)
-  }
-}
+    body: JSON.stringify(itemWithStatus),
+  };
+};
 
-export default getInvoiceByIdController
+export default getInvoiceByIdController;
