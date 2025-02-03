@@ -1,93 +1,102 @@
-import { ddbDocClient, tableName } from "@/db/client";
-import { addStatusToInvoice } from "@/utils";
-import {
-  createInvoiceSchema,
-  invoiceSchema,
-  Item,
-  type Invoice,
-} from "@/validation";
-import { PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { getDatabaseClient } from "@/db/client";
+import { addStatusToInvoice, getUserId } from "@/utils";
+import { createInvoiceSchema, Item, type Invoice } from "@/validation";
 import {
   type APIGatewayProxyEvent,
   type APIGatewayProxyResult,
 } from "aws-lambda";
-import dayjs from "dayjs";
-import { z } from "zod";
 
 const postClientController = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
-  const userId = invoiceSchema.shape.userId.parse(
-    event.requestContext.authorizer?.jwt?.claims?.sub
-  );
+  const databaseClient = await getDatabaseClient();
+  try {
+    const userId = getUserId(event);
 
-  const validateBody = createInvoiceSchema.parse(event.body);
+    const { items: newItems, ...newInvoiceData } = createInvoiceSchema.parse(
+      event.body
+    );
 
-  const invoiceYear = dayjs(validateBody.invoiceDate).format("YYYY");
+    const subTotal = newItems.reduce((acc, item) => {
+      return parseFloat((acc + item.itemPrice * item.itemQuantity).toFixed(2));
+    }, 0);
 
-  // Increment the invoice number for the current year
-  const updateCommand = new UpdateCommand({
-    TableName: tableName,
-    Key: { userId, invoiceId: `counter-${invoiceYear}` },
-    UpdateExpression:
-      "SET invoiceNumber = if_not_exists(invoiceNumber, :start) + :inc",
-    ExpressionAttributeValues: {
-      ":inc": 1,
-      ":start": 0,
-    },
-    ReturnValues: "UPDATED_NEW",
-  });
+    const taxAmount =
+      newInvoiceData.taxPercentage > 0
+        ? parseFloat(
+            (subTotal * (newInvoiceData.taxPercentage / 100)).toFixed(2)
+          )
+        : 0;
+    const totalAmount = parseFloat((subTotal + taxAmount).toFixed(2));
 
-  const counterResult = await ddbDocClient.send(updateCommand);
-  const incrementalNumber = z
-    .number()
-    .parse(counterResult.Attributes?.invoiceNumber);
+    const newInvoice: Omit<Invoice, "status" | "invoiceId" | "items"> = {
+      // status should be returned by the API but not saved in the database
+      ...newInvoiceData,
+      userId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      taxAmount,
+      subTotal,
+      totalAmount,
+    };
 
-  // Format the invoice number as "invoiceYear-incNumber"
-  const newInvoiceNumber = `${invoiceYear}-${String(incrementalNumber).padStart(
-    3,
-    "0"
-  )}`;
+    databaseClient.query("BEGIN");
 
-  const subTotal = validateBody.items.reduce((acc, item) => {
-    return parseFloat((acc + item.itemPrice * item.itemQuantity).toFixed(2));
-  }, 0);
+    const createdInvoiceResult = await databaseClient.query(
+      `INSERT INTO invoicing_app.invoices ("invoiceDate", "invoiceDueDays", "userId", "clientId", "paid", "currency", "taxPercentage", "subTotal",
+       "taxAmount", "totalAmount", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+      ) RETURNING *`,
+      [
+        newInvoice.invoiceDate,
+        newInvoice.invoiceDueDays,
+        newInvoice.userId,
+        newInvoice.clientId,
+        newInvoice.paid,
+        newInvoice.currency,
+        newInvoice.taxPercentage,
+        newInvoice.subTotal,
+        newInvoice.taxAmount,
+        newInvoice.totalAmount,
+        newInvoice.createdAt,
+        newInvoice.updatedAt,
+      ]
+    );
 
-  const taxAmount =
-    validateBody.taxPercentage > 0
-      ? parseFloat((subTotal * (validateBody.taxPercentage / 100)).toFixed(2))
-      : 0;
-  const totalAmount = parseFloat((subTotal + taxAmount).toFixed(2));
+    const createdInvoice = createdInvoiceResult.rows[0] as Invoice;
 
-  const newInvoice: Omit<Invoice, "status"> = {
-    // status should be returned by the API but not saved in the database
-    ...validateBody,
-    invoiceId: newInvoiceNumber,
-    userId,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    items: validateBody.items.map((item) => ({
+    const items: Omit<Item, "itemId">[] = newItems.map((item) => ({
       ...item,
-      itemId: crypto.randomUUID(),
-    })) as [Item, ...Item[]],
-    taxAmount,
-    subTotal,
-    totalAmount,
-  };
+      invoiceId: createdInvoice.invoiceId,
+    }));
 
-  const command = new PutCommand({
-    TableName: tableName,
-    Item: newInvoice,
-  });
+    const itemsInsertPromises = items.map((item) =>
+      databaseClient.query(
+        `INSERT INTO invoicing_app.items ( "invoiceId", "itemName", "itemPrice", "itemQuantity") VALUES ($1, $2, $3, $4) RETURNING *`,
+        [item.invoiceId, item.itemName, item.itemPrice, item.itemQuantity]
+      )
+    );
 
-  await ddbDocClient.send(command);
+    const returnedItemsResult = await Promise.all(itemsInsertPromises);
 
-  const returnInvoice = addStatusToInvoice(newInvoice);
+    databaseClient.query("COMMIT");
 
-  return {
-    statusCode: 201,
-    body: JSON.stringify(returnInvoice),
-  };
+    const itemsResult = returnedItemsResult.map(
+      (result) => result.rows[0] as Item
+    );
+
+    const returnInvoice = {
+      ...addStatusToInvoice(createdInvoice),
+      items: itemsResult,
+    };
+
+    return {
+      statusCode: 201,
+      body: JSON.stringify(returnInvoice),
+    };
+  } catch (error) {
+    databaseClient.query("ROLLBACK");
+    throw error;
+  }
 };
 
 export default postClientController;
