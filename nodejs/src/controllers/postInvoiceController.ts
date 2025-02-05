@@ -1,10 +1,17 @@
-import { getDatabaseClient } from "@/db/client";
-import { addStatusToInvoice, getUserId } from "@/utils";
-import { createInvoiceSchema, Item, type Invoice } from "@/validation";
+import { getDatabaseClient } from "@/db/databaseClient";
+import { addStatusToInvoice, getAuthToken, getUserId } from "@/utils";
+import {
+  createInvoiceSchema,
+  invoiceSchema,
+  Item,
+  type Invoice,
+} from "@/validation";
 import {
   type APIGatewayProxyEvent,
   type APIGatewayProxyResult,
 } from "aws-lambda";
+import createError from "http-errors";
+import getUser from "./getUser";
 
 const postClientController = async (
   event: APIGatewayProxyEvent
@@ -12,10 +19,24 @@ const postClientController = async (
   const databaseClient = await getDatabaseClient();
   try {
     const userId = getUserId(event);
+    const authToken = getAuthToken(event);
+    const user = await getUser(authToken);
 
     const { items: newItems, ...newInvoiceData } = createInvoiceSchema.parse(
       event.body
     );
+
+    // check if client exists
+    const clientResult = await databaseClient.query(
+      `SELECT "clientId" FROM invoicing_app.clients WHERE "clientId" = $1`,
+      [newInvoiceData.clientId]
+    );
+
+    if (clientResult.rowCount === 0) {
+      throw createError.NotFound(
+        `Client with clientId "${newInvoiceData.clientId}" not found`
+      );
+    }
 
     const subTotal = newItems.reduce((acc, item) => {
       return parseFloat((acc + item.itemPrice * item.itemQuantity).toFixed(2));
@@ -29,22 +50,23 @@ const postClientController = async (
         : 0;
     const totalAmount = parseFloat((subTotal + taxAmount).toFixed(2));
 
-    const newInvoice: Omit<Invoice, "status" | "invoiceId" | "items"> = {
+    const newInvoice = {
       // status should be returned by the API but not saved in the database
       ...newInvoiceData,
       userId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
       taxAmount,
       subTotal,
       totalAmount,
+      companyName: user.companyName,
     };
 
     databaseClient.query("BEGIN");
 
     const createdInvoiceResult = await databaseClient.query(
       `INSERT INTO invoicing_app.invoices ("invoiceDate", "invoiceDueDays", "userId", "clientId", "paid", "currency", "taxPercentage", "subTotal",
-       "taxAmount", "totalAmount", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+       "taxAmount", "totalAmount", "createdAt", "updatedAt", "companyName") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
       ) RETURNING *`,
       [
         newInvoice.invoiceDate,
@@ -59,6 +81,7 @@ const postClientController = async (
         newInvoice.totalAmount,
         newInvoice.createdAt,
         newInvoice.updatedAt,
+        newInvoice.companyName,
       ]
     );
 
@@ -84,10 +107,10 @@ const postClientController = async (
       (result) => result.rows[0] as Item
     );
 
-    const returnInvoice = {
+    const returnInvoice = invoiceSchema.parse({
       ...addStatusToInvoice(createdInvoice),
       items: itemsResult,
-    };
+    });
 
     return {
       statusCode: 201,
