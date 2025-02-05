@@ -18,7 +18,6 @@
     "@types/node": "^22.10.1",
     "@types/pg": "^8.11.11",
     "@vitest/coverage-v8": "^2.1.8",
-    "aws-sdk-client-mock": "^4.1.0",
     "esbuild": "^0.24.2",
     "eslint": "^9.17.0",
     "globals": "^15.14.0",
@@ -27,9 +26,8 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.705.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.741.0",
     "@aws-sdk/dsql-signer": "^3.738.0",
-    "@aws-sdk/lib-dynamodb": "^3.705.0",
     "@middy/core": "^6.0.0",
     "@middy/error-logger": "^6.0.0",
     "@middy/http-content-encoding": "^6.0.0",
