@@ -1,40 +1,41 @@
-import { CreateInvoice, Invoice, Item, UpdateInvoice } from "@/validation";
+import { Item, UpdateInvoice } from "@/validation";
 import { faker } from "@faker-js/faker";
 
-export function generateCreateInvoice(): CreateInvoice {
+export function generateCreateInvoice() {
   return {
     currency: maybe(faker.helpers.arrayElement(["USD", "EUR", "GBP"])),
     taxPercentage: maybe(faker.number.int({ min: 0, max: 30 })),
     items: generateItems(faker.number.int({ min: 1, max: 10 })),
     clientId: faker.string.uuid(),
-    clientName: faker.company.name(),
-    invoiceDate: maybe(faker.date.recent().toISOString()),
+    invoiceDate: maybe(faker.date.recent()),
     invoiceDueDays: maybe(faker.number.int({ min: 1, max: 30 })),
-    userName: faker.company.name(),
   };
 }
 
-export function generateInvoices(
-  num: number,
-  userId: string
-): Omit<Invoice, "status">[] {
+export function generateInvoices(num: number, userId: string) {
   return Array.from({ length: num }, () => ({
     invoiceId: faker.string.uuid(),
     currency: faker.helpers.arrayElement(["USD", "EUR", "GBP"]),
-    taxPercentage: faker.number.int({ min: 0, max: 30 }),
+    companyName: faker.company.name(),
     items: generateItems(faker.number.int({ min: 1, max: 10 })),
     clientId: faker.string.uuid(),
-    clientName: faker.company.name(),
     userId,
-    userName: faker.company.name(),
-    invoiceDate: faker.date.recent({ days: 30 }).toISOString(),
     invoiceDueDays: faker.number.int({ min: 1, max: 30 }),
     paid: false,
-    subTotal: faker.number.float({ min: 0, max: 10000, fractionDigits: 2 }),
-    taxAmount: faker.number.float({ min: 0, max: 3000, fractionDigits: 2 }),
-    totalAmount: faker.number.float({ min: 0, max: 13000, fractionDigits: 2 }),
-    createdAt: faker.date.past().toISOString(),
-    updatedAt: faker.date.recent().toISOString(),
+    taxPercentage: faker.number.int({ min: 0, max: 30 }).toString(),
+    subTotal: faker.number
+      .float({ min: 0, max: 10000, fractionDigits: 2 })
+      .toString(),
+    taxAmount: faker.number
+      .float({ min: 0, max: 3000, fractionDigits: 2 })
+      .toString(),
+    totalAmount: faker.number
+      .float({ min: 0, max: 13000, fractionDigits: 2 })
+      .toString(),
+    invoiceDate: faker.date.recent({ days: 30 }),
+    createdAt: faker.date.past(),
+    updatedAt: faker.date.recent(),
+    status: "sent",
   }));
 }
 
@@ -49,6 +50,7 @@ export function generateUpdateInvoice(): UpdateInvoice {
 }
 
 function generateItems(num: number) {
+  const invoiceId = faker.string.uuid();
   const items: Item[] = Array(num)
     .fill(0)
     .map(() => ({
@@ -56,6 +58,7 @@ function generateItems(num: number) {
       itemName: faker.commerce.productName(),
       itemPrice: faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }),
       itemQuantity: faker.number.int({ min: 1, max: 100 }),
+      invoiceId,
     }));
   return items as [Item, ...Item[]];
 }
