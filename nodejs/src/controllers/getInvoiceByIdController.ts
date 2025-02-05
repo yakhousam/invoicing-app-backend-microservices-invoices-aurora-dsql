@@ -1,6 +1,6 @@
-import { getDatabaseClient } from "@/db/client";
+import { getDatabaseClient } from "@/db/databaseClient";
 import { addStatusToInvoice, getUserId } from "@/utils";
-import { type Invoice } from "@/validation";
+import { invoiceSchema, type Invoice } from "@/validation";
 import {
   type APIGatewayProxyEvent,
   type APIGatewayProxyResult,
@@ -21,7 +21,13 @@ const getInvoiceByIdController = async (
   const dbClient = await getDatabaseClient();
 
   const result = await dbClient.query(
-    'SELECT * FROM invoicing_app.invoices WHERE "invoiceId" = $1 AND "userId" = $2',
+    ` SELECT 
+        i.*,
+        c."clientName"
+      FROM invoicing_app.invoices i
+      JOIN invoicing_app.clients c ON i."clientId" = c."clientId"
+      WHERE i."invoiceId" = $1 AND i."userId" = $2
+`,
     [invoiceId, userId]
   );
 
@@ -32,13 +38,24 @@ const getInvoiceByIdController = async (
       `Invoice with invoiceId "${invoiceId}" not found`
     );
   }
-  const itemWithStatus = addStatusToInvoice(invoice as Invoice);
 
-  // const parsedItem = invoiceSchema.parse(itemWithStatus);
+  const itemsResult = await dbClient.query(
+    `SELECT * FROM invoicing_app.items WHERE "invoiceId" = $1`,
+    [invoiceId]
+  );
+
+  const items = itemsResult.rows;
+
+  const invoiceWithStatus = addStatusToInvoice({
+    ...invoice,
+    items,
+  } as Invoice);
+
+  const parsedInvoice = invoiceSchema.parse(invoiceWithStatus);
 
   return {
     statusCode: 200,
-    body: JSON.stringify(itemWithStatus),
+    body: JSON.stringify(parsedInvoice),
   };
 };
 
