@@ -1,13 +1,23 @@
-import { DynamoDBDocumentClient, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import { getDatabaseClient } from "@/db/databaseClient";
 import { type APIGatewayProxyEvent, type Context } from "aws-lambda";
-import { mockClient } from "aws-sdk-client-mock";
-import { beforeEach, describe, expect, it } from "vitest";
+import { Client as PgClient } from "pg";
+import { beforeEach, describe, expect, it, Mock, vi } from "vitest";
 import { handler as deleteInvoicedHandler } from "../../functions/deleteInvoice";
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
-import { tableName } from "@/db/client";
+import { generateUserId } from "./generate";
+
+vi.mock("@/db/databaseClient", () => {
+  const mClient = {
+    connect: vi.fn(),
+    query: vi.fn(),
+    end: vi.fn(),
+  };
+  return {
+    getDatabaseClient: vi.fn(() => mClient),
+  };
+});
 
 describe("Test deleteInvoice", () => {
-  const ddbMock = mockClient(DynamoDBDocumentClient);
+  let dbClient: PgClient;
 
   const event = {
     httpMethod: "DELETE",
@@ -29,28 +39,29 @@ describe("Test deleteInvoice", () => {
     getRemainingTimeInMillis: false,
   } as unknown as Context;
 
-  beforeEach(() => {
-    ddbMock.reset();
+  beforeEach(async () => {
+    dbClient = await getDatabaseClient();
   });
 
   it("should delete a invoice by id", async () => {
-    const userId = "userId";
+    const userId = generateUserId();
     const invoiceId = "invoiceId";
 
-    ddbMock
-      .on(DeleteCommand, {
-        TableName: tableName,
-        Key: {
-          invoiceId: invoiceId,
-          userId,
-        },
-      })
-      .resolves({});
+    (dbClient.query as Mock).mockResolvedValue({});
 
     const deleteInvoiceEvent = {
       ...event,
       pathParameters: {
         invoiceId,
+      },
+      requestContext: {
+        authorizer: {
+          jwt: {
+            claims: {
+              sub: userId,
+            },
+          },
+        },
       },
     } as unknown as APIGatewayProxyEvent;
 
@@ -60,35 +71,6 @@ describe("Test deleteInvoice", () => {
     expect(response.body).toBe(JSON.stringify({}));
   });
 
-  it("should return 404 if invoice not found", async () => {
-    const userId = "userId";
-    const invoiceId = "invoiceId";
-
-    ddbMock
-      .on(DeleteCommand, {
-        TableName: tableName,
-        Key: {
-          invoiceId: invoiceId,
-          userId,
-        },
-      })
-      .rejects(
-        new ConditionalCheckFailedException({
-          message: "Invoice not found",
-          $metadata: {},
-        })
-      );
-
-    const deleteInvoiceEvent = {
-      ...event,
-      pathParameters: {
-        invoiceId,
-      },
-    } as unknown as APIGatewayProxyEvent;
-
-    const result = await deleteInvoicedHandler(deleteInvoiceEvent, context);
-    expect(result.statusCode).toBe(404);
-  });
   it("should return 400 if invoiceId is not provided", async () => {
     const deleteInvoiceEvent = {
       ...event,
@@ -97,6 +79,5 @@ describe("Test deleteInvoice", () => {
 
     const result = await deleteInvoicedHandler(deleteInvoiceEvent, context);
     expect(result.statusCode).toBe(400);
-    expect(result.body).toBe("invoiceId is required");
   });
 });

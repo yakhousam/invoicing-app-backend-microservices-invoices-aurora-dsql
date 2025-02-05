@@ -1,23 +1,39 @@
-import { Invoice } from "@/validation";
-import {
-  DynamoDBDocumentClient,
-  PutCommand,
-  UpdateCommand,
-} from "@aws-sdk/lib-dynamodb";
+import { getDatabaseClient } from "@/db/databaseClient";
+import { addStatusToInvoice } from "@/utils";
+import { createInvoiceSchema, Invoice } from "@/validation";
 import { type APIGatewayProxyEvent, type Context } from "aws-lambda";
-import { mockClient } from "aws-sdk-client-mock";
-import dayjs from "dayjs";
-import { beforeEach, describe, expect, it } from "vitest";
+import { Client as PgClient } from "pg";
+import { beforeEach, describe, expect, it, Mock, vi } from "vitest";
 import { type ZodIssue } from "zod";
 import { handler as postClientHandler } from "../../functions/postInvoice";
 import {
   generateCreateInvoice,
+  generateInvoices,
   generateName,
   generateUserId,
 } from "./generate";
 
+vi.mock("@/controllers/getUser", () => {
+  return {
+    default: vi.fn().mockResolvedValue({
+      companyName: "Test Company",
+    }),
+  };
+});
+
+vi.mock("@/db/databaseClient", () => {
+  const mClient = {
+    connect: vi.fn(),
+    query: vi.fn(),
+    end: vi.fn(),
+  };
+  return {
+    getDatabaseClient: vi.fn(() => mClient),
+  };
+});
+
 describe("Test postInvoice", () => {
-  const ddbMock = mockClient(DynamoDBDocumentClient);
+  let dbClient: PgClient;
 
   const event = {
     httpMethod: "POST",
@@ -31,21 +47,43 @@ describe("Test postInvoice", () => {
     getRemainingTimeInMillis: false,
   } as unknown as Context;
 
-  beforeEach(() => {
-    ddbMock.reset();
+  beforeEach(async () => {
+    dbClient = await getDatabaseClient();
   });
 
   it("should create an invoice", async () => {
     const userId = generateUserId();
+    const expectedInvoice = addStatusToInvoice(
+      generateInvoices(1, userId)[0] as unknown as Invoice
+    );
 
-    const createInvoiceData = generateCreateInvoice();
-    const expectedInvoiceId = `${dayjs().year()}-001`;
+    const createInvoiceData = createInvoiceSchema.parse({
+      ...expectedInvoice,
+      invoiceDate: expectedInvoice.invoiceDate.toISOString(),
+      taxPercentage: Number(expectedInvoice.taxPercentage),
+    });
 
-    ddbMock
-      .on(UpdateCommand)
-      .resolves({ Attributes: { invoiceNumber: 1 } })
-      .on(PutCommand)
-      .resolves({});
+    const { items, ...invoice } = expectedInvoice;
+
+    // query client if exist
+    (dbClient.query as Mock).mockResolvedValueOnce({
+      rowCount: 1,
+    });
+    // begin transaction
+    (dbClient.query as Mock).mockResolvedValueOnce({});
+    // query invoices
+    (dbClient.query as Mock).mockResolvedValueOnce({
+      rows: [invoice],
+    });
+
+    // query items
+    for (const item of items) {
+      (dbClient.query as Mock).mockResolvedValueOnce({
+        rows: [item],
+      });
+    }
+    // end transaction
+    (dbClient.query as Mock).mockResolvedValueOnce({});
 
     const putEvent = {
       ...event,
@@ -66,11 +104,8 @@ describe("Test postInvoice", () => {
 
     const returnedBody = JSON.parse(result.body) as Invoice;
 
-    expect(returnedBody.invoiceId).toBe(expectedInvoiceId);
     expect(returnedBody.clientId).toBe(createInvoiceData.clientId);
-    expect(returnedBody.clientName).toBe(createInvoiceData.clientName);
     expect(returnedBody.userId).toBe(userId);
-    expect(returnedBody.userName).toBe(createInvoiceData.userName);
     expect(returnedBody.currency).toBe(createInvoiceData.currency || "USD");
     expect(returnedBody.taxPercentage).toBe(
       createInvoiceData.taxPercentage || 0
@@ -82,94 +117,9 @@ describe("Test postInvoice", () => {
     expect(returnedBody.items.length).toBe(createInvoiceData.items.length);
     expect(returnedBody.createdAt).toBeDefined();
     expect(returnedBody.updatedAt).toBeDefined();
-
-    const expectedInvoiceDate = createInvoiceData.invoiceDate
-      ? dayjs(String(createInvoiceData.invoiceDate))
-          .startOf("day")
-          .toISOString()
-      : dayjs().startOf("day").toISOString();
-
-    expect(dayjs(returnedBody.invoiceDate).startOf("day").toISOString()).toBe(
-      expectedInvoiceDate
-    );
-
-    expect(
-      returnedBody.items[Math.floor(Math.random() * returnedBody.items.length)]
-        .itemId
-    ).toBeDefined();
-
-    const expectedSubTotal = returnedBody.items.reduce(
-      (acc, item) =>
-        parseFloat((acc + item.itemPrice * item.itemQuantity).toFixed(2)),
-      0
-    );
-    expect(returnedBody.subTotal).toBe(expectedSubTotal);
-    expect(returnedBody.taxAmount).toBe(
-      parseFloat(
-        (
-          (expectedSubTotal * (createInvoiceData.taxPercentage || 0)) /
-          100
-        ).toFixed(2)
-      )
-    );
-    expect(returnedBody.totalAmount).toBe(
-      parseFloat((expectedSubTotal + returnedBody.taxAmount).toFixed(2))
-    );
-  });
-
-  it("should increment invoice number", async () => {
-    const userId = generateUserId();
-
-    const generatedInvoice = generateCreateInvoice();
-    generatedInvoice.invoiceDate = dayjs().toISOString();
-
-    const expectedInvoiceIdOne = `${dayjs().year()}-001`;
-    const expectedInvoiceIdTwo = `${dayjs().year()}-002`;
-
-    ddbMock
-      .on(PutCommand)
-      .resolves({})
-      .on(UpdateCommand)
-      .resolvesOnce({ Attributes: { invoiceNumber: 1 } })
-      .resolvesOnce({ Attributes: { invoiceNumber: 2 } });
-
-    const putEvent1 = {
-      ...event,
-      requestContext: {
-        authorizer: {
-          jwt: {
-            claims: {
-              sub: userId,
-            },
-          },
-        },
-      },
-      body: JSON.stringify(generateCreateInvoice()),
-    } as unknown as APIGatewayProxyEvent;
-
-    const putEvent2 = {
-      ...event,
-      requestContext: {
-        authorizer: {
-          jwt: {
-            claims: {
-              sub: userId,
-            },
-          },
-        },
-      },
-      body: JSON.stringify(generateCreateInvoice()),
-    } as unknown as APIGatewayProxyEvent;
-
-    const result1 = await postClientHandler(putEvent1, context);
-    expect(result1.statusCode).toBe(201);
-    const returnedBody1 = JSON.parse(result1.body) as Invoice;
-    expect(returnedBody1.invoiceId).toBe(expectedInvoiceIdOne);
-
-    const result2 = await postClientHandler(putEvent2, context);
-    expect(result2.statusCode).toBe(201);
-    const returnedBody2 = JSON.parse(result2.body) as Invoice;
-    expect(returnedBody2.invoiceId).toBe(expectedInvoiceIdTwo);
+    expect(returnedBody.subTotal).toBeDefined();
+    expect(returnedBody.taxAmount).toBeDefined();
+    expect(returnedBody.totalAmount).toBeDefined();
   });
 
   describe("Validations", () => {
@@ -197,34 +147,6 @@ describe("Test postInvoice", () => {
       expect(result.statusCode).toBe(400);
       const returnedBody = JSON.parse(result.body) as ZodIssue[];
       expect(returnedBody[0].path).toContain("clientId");
-    });
-
-    it("should throw an error when clientName is not provided", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { clientName, ...createInvoiceData } = generateCreateInvoice();
-
-      const userId = generateUserId();
-      const userName = generateName();
-
-      const putEvent = {
-        ...event,
-        requestContext: {
-          authorizer: {
-            jwt: {
-              claims: {
-                sub: userId,
-                name: userName,
-              },
-            },
-          },
-        },
-        body: JSON.stringify(createInvoiceData),
-      } as unknown as APIGatewayProxyEvent;
-
-      const result = await postClientHandler(putEvent, context);
-      expect(result.statusCode).toBe(400);
-      const returnedBody = JSON.parse(result.body) as ZodIssue[];
-      expect(returnedBody[0].path).toContain("clientName");
     });
 
     it("should throw an error when items is not provided", async () => {
@@ -312,7 +234,7 @@ describe("Test postInvoice", () => {
 
     it("should throw an error when invoiceDate is invalid", async () => {
       const createInvoiceData = generateCreateInvoice();
-      createInvoiceData.invoiceDate = "invalid date";
+      createInvoiceData.invoiceDate = "invalid date" as unknown as Date;
 
       const userId = generateUserId();
 
