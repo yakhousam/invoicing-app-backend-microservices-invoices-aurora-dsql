@@ -28,6 +28,7 @@ Globals:
         DSQL_CLUSTER_URL: !Ref DsqlClusterUrl
         REGION: !Ref "AWS::Region"
         userId: ""
+        authToken: ""
         NODE_ENV: "production"
 
 Resources:
