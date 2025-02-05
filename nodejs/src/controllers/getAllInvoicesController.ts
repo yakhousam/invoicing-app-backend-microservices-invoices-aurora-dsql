@@ -1,6 +1,10 @@
-import { getDatabaseClient } from "@/db/client";
+import { getDatabaseClient } from "@/db/databaseClient";
 import { addStatusToInvoice, getUserId } from "@/utils";
-import { Invoice, invoiceSchema, invoicesQuerySchema } from "@/validation";
+import {
+  getAllInvoicesResponse,
+  Invoice,
+  getAllInvoicesQuery,
+} from "@/validation";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import createError from "http-errors";
 
@@ -13,7 +17,7 @@ const getAllInvoicesController = async (
     throw new createError.Unauthorized("Unauthorized");
   }
 
-  const { limit, offset } = invoicesQuerySchema.parse(
+  const { limit, offset } = getAllInvoicesQuery.parse(
     event.queryStringParameters
   );
 
@@ -27,7 +31,10 @@ const getAllInvoicesController = async (
   const totalCount = parseInt(countResult.rows[0].count, 10);
 
   const invoicesData = await databaseClient.query(
-    'SELECT * FROM invoicing_app.invoices WHERE "userId" = $1 LIMIT $2 OFFSET $3',
+    `SELECT I."invoiceId", I."invoiceDate", I."totalAmount", I."paid", I."invoiceDueDays", C."clientName" 
+     FROM invoicing_app.invoices As I, invoicing_app.clients AS C 
+     WHERE I."userId" = $1 AND I."clientId" = C."clientId" 
+     LIMIT $2 OFFSET $3`,
     [userId, limit, offset]
   );
 
@@ -35,11 +42,13 @@ const getAllInvoicesController = async (
     addStatusToInvoice(invoice as Invoice)
   );
 
-  const parsedInvoices = invoiceSchema.array().parse(invoices);
+  const parsedInvoices = getAllInvoicesResponse.parse(invoices);
 
   const response = {
     invoices: parsedInvoices,
     count: totalCount,
+    limit,
+    offset,
   };
   return {
     statusCode: 200,
