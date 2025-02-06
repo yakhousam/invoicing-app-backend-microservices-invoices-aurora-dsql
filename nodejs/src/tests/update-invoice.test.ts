@@ -147,7 +147,7 @@ describe("Test updateInvoice", () => {
     expect(result.statusCode).toBe(404);
   });
 
-  describe.skip("Validation", () => {
+  describe("Validation", () => {
     it("should throw an error when update object is empty", async () => {
       const userId = generateUserId();
       const userName = generateName();

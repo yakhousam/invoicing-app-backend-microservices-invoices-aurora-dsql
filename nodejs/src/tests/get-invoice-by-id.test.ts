@@ -86,7 +86,7 @@ describe("Test getinvoiceById", () => {
     expect(returnedInvoice).toEqual(expected);
   });
 
-  it.only("should set the correct status for the invoice", async () => {
+  it("should set the correct status for the invoice", async () => {
     const userId = generateUserId();
     const expectedInvoice = addStatusToInvoice(
       generateInvoices(1, userId)[0] as unknown as Invoice
