@@ -48,7 +48,7 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --resolve-s3 \
-            --stack-name invoicing-app-invoices-microservice \
+            --stack-name invoicing-app-invoices-microservice-aurora-dsql \
             --capabilities CAPABILITY_IAM \
-            --parameter-overrides UserPoolId=${{ secrets.USER_POOL_ID }} UserPoolClientId=${{ secrets.USER_POOL_CLIENT_ID }} \
+             --parameter-overrides UserPoolId=${{ secrets.USER_POOL_ID }} UserPoolClientId=${{ secrets.USER_POOL_CLIENT_ID }} DsqlClusterUrl=${{ secrets.DSQL_CLUSTER_URL }} DsqlClusterArn=${{ secrets.DSQL_CLUSTER_ARN }} \
             --region us-east-1
