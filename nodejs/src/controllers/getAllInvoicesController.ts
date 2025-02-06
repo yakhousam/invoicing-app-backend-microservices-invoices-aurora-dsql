@@ -31,7 +31,7 @@ const getAllInvoicesController = async (
   const totalCount = parseInt(countResult.rows[0].count, 10);
 
   const invoicesData = await databaseClient.query(
-    `SELECT I."invoiceId", I."invoiceDate", I."totalAmount", I."paid", I."invoiceDueDays", C."clientName" 
+    `SELECT I."invoiceId", I."invoiceDate", I."totalAmount", I."paid", I."invoiceDueDays", I."currency", C."clientName" 
      FROM invoicing_app.invoices As I, invoicing_app.clients AS C 
      WHERE I."userId" = $1 AND I."clientId" = C."clientId" 
      LIMIT $2 OFFSET $3`,

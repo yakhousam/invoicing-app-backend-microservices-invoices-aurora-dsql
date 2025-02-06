@@ -88,6 +88,7 @@ export const getAllInvoicesResponse = z.array(
       invoiceDate: true,
       totalAmount: true,
       status: true,
+      currency: true,
     })
     .extend({
       clientName: z.string(),
