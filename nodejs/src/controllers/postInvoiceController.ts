@@ -87,15 +87,15 @@ const postClientController = async (
 
     const createdInvoice = createdInvoiceResult.rows[0] as Invoice;
 
-    const items: Omit<Item, "itemId">[] = newItems.map((item) => ({
-      ...item,
-      invoiceId: createdInvoice.invoiceId,
-    }));
-
-    const itemsInsertPromises = items.map((item) =>
+    const itemsInsertPromises = newItems.map((item) =>
       databaseClient.query(
         `INSERT INTO invoicing_app.items ( "invoiceId", "itemName", "itemPrice", "itemQuantity") VALUES ($1, $2, $3, $4) RETURNING *`,
-        [item.invoiceId, item.itemName, item.itemPrice, item.itemQuantity]
+        [
+          createdInvoice.invoiceId,
+          item.itemName,
+          item.itemPrice,
+          item.itemQuantity,
+        ]
       )
     );
 
@@ -107,8 +107,19 @@ const postClientController = async (
       (result) => result.rows[0] as Item
     );
 
+    const getNewInvoice = await databaseClient.query(
+      `SELECT 
+        i.*,
+        c."clientName"
+      FROM invoicing_app.invoices i
+      JOIN invoicing_app.clients c ON i."clientId" = c."clientId"
+      WHERE i."invoiceId" = $1 AND i."userId" = $2
+  `,
+      [createdInvoice.invoiceId, userId]
+    );
+
     const returnInvoice = invoiceSchema.parse({
-      ...addStatusToInvoice(createdInvoice),
+      ...addStatusToInvoice(getNewInvoice.rows[0]),
       items: itemsResult,
     });
 

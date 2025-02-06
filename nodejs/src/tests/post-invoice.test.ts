@@ -71,12 +71,12 @@ describe("Test postInvoice", () => {
     });
     // begin transaction
     (dbClient.query as Mock).mockResolvedValueOnce({});
-    // query invoices
+    // insert invoice
     (dbClient.query as Mock).mockResolvedValueOnce({
       rows: [invoice],
     });
 
-    // query items
+    // insert items
     for (const item of items) {
       (dbClient.query as Mock).mockResolvedValueOnce({
         rows: [item],
@@ -84,6 +84,11 @@ describe("Test postInvoice", () => {
     }
     // end transaction
     (dbClient.query as Mock).mockResolvedValueOnce({});
+
+    // get invoice
+    (dbClient.query as Mock).mockResolvedValueOnce({
+      rows: [invoice],
+    });
 
     const putEvent = {
       ...event,

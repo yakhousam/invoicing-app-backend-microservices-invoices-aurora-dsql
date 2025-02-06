@@ -77,8 +77,19 @@ const updateInvoiceController = async (
     );
     await databaseClient.query("COMMIT");
 
+    const updatedInvoice = await databaseClient.query(
+      `SELECT 
+        i.*,
+        c."clientName"
+      FROM invoicing_app.invoices i
+      JOIN invoicing_app.clients c ON i."clientId" = c."clientId"
+      WHERE i."invoiceId" = $1 AND i."userId" = $2
+  `,
+      [invoiceId, userId]
+    );
+
     const returnInvoice = invoiceSchema.parse({
-      ...addStatusToInvoice(updateInvoiceResult.rows?.[0]),
+      ...addStatusToInvoice(updatedInvoice.rows?.[0]),
       items: itemsResult.rows as Item[],
     });
 

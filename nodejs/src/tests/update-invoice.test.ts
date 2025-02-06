@@ -62,9 +62,7 @@ describe("Test updateInvoice", () => {
     // begin transaction
     (dbClient.query as Mock).mockResolvedValueOnce({});
     // update invoice
-    (dbClient.query as Mock).mockResolvedValueOnce({
-      rows: [invoice],
-    });
+    (dbClient.query as Mock).mockResolvedValueOnce({});
 
     // delete items
     (dbClient.query as Mock).mockResolvedValueOnce({});
@@ -83,6 +81,11 @@ describe("Test updateInvoice", () => {
 
     // commit transaction
     (dbClient.query as Mock).mockResolvedValueOnce({});
+
+    // get invoice
+    (dbClient.query as Mock).mockResolvedValueOnce({
+      rows: [invoice],
+    });
 
     const updateClientEvent = {
       ...event,
