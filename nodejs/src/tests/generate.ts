@@ -16,7 +16,8 @@ export function generateInvoices(num: number, userId: string) {
   return Array.from({ length: num }, () => ({
     invoiceId: faker.string.uuid(),
     currency: faker.helpers.arrayElement(["USD", "EUR", "GBP"]),
-    companyName: faker.company.name(),
+    userCompanyName: faker.company.name(),
+    clientName: faker.company.name(),
     items: generateItems(faker.number.int({ min: 1, max: 10 })),
     clientId: faker.string.uuid(),
     userId,

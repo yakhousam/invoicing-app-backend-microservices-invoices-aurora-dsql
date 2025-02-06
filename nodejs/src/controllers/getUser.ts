@@ -21,7 +21,7 @@ const getUser = async (accessToken: string) => {
   );
   return {
     ...formatedData,
-    companyName: formatedData?.name,
+    userCompanyName: formatedData?.name,
   };
 };
 

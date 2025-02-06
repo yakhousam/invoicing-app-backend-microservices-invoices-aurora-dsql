@@ -36,7 +36,8 @@ export const invoiceSchema = z.object({
   invoiceId: z.string(),
   invoiceDate: z.date(),
   invoiceDueDays: z.number().max(30).default(7),
-  companyName: z.string(),
+  userCompanyName: z.string(),
+  clientName: z.string(),
   userId: z
     .string({ message: "User ID is required" })
     .uuid("User ID must be a valid UUID")

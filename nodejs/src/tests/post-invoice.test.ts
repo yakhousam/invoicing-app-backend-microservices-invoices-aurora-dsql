@@ -16,7 +16,7 @@ import {
 vi.mock("@/controllers/getUser", () => {
   return {
     default: vi.fn().mockResolvedValue({
-      companyName: "Test Company",
+      userCompanyName: "Test Company",
     }),
   };
 });

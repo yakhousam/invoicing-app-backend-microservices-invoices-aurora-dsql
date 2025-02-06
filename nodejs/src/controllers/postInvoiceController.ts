@@ -59,14 +59,14 @@ const postClientController = async (
       taxAmount,
       subTotal,
       totalAmount,
-      companyName: user.companyName,
+      userCompanyName: user.userCompanyName,
     };
 
     databaseClient.query("BEGIN");
 
     const createdInvoiceResult = await databaseClient.query(
       `INSERT INTO invoicing_app.invoices ("invoiceDate", "invoiceDueDays", "userId", "clientId", "paid", "currency", "taxPercentage", "subTotal",
-       "taxAmount", "totalAmount", "createdAt", "updatedAt", "companyName") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+       "taxAmount", "totalAmount", "createdAt", "updatedAt", "userCompanyName") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
       ) RETURNING *`,
       [
         newInvoice.invoiceDate,
@@ -81,7 +81,7 @@ const postClientController = async (
         newInvoice.totalAmount,
         newInvoice.createdAt,
         newInvoice.updatedAt,
-        newInvoice.companyName,
+        newInvoice.userCompanyName,
       ]
     );
 
