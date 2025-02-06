@@ -108,7 +108,15 @@ describe("Test updateInvoice", () => {
     const returnedInvoice = JSON.parse(result.body) as Invoice;
 
     expect(returnedInvoice).toEqual(
-      JSON.parse(JSON.stringify(expectedInvoice))
+      JSON.parse(
+        JSON.stringify({
+          ...expectedInvoice,
+          taxPercentage: Number(expectedInvoice.taxPercentage),
+          taxAmount: Number(expectedInvoice.taxAmount),
+          totalAmount: Number(expectedInvoice.totalAmount),
+          subTotal: Number(expectedInvoice.subTotal),
+        })
+      )
     );
   });
 

@@ -1,6 +1,6 @@
 import { getDatabaseClient } from "@/db/databaseClient";
 import { addStatusToInvoice, createUpdateExpression, getUserId } from "@/utils";
-import { Invoice, Item, updateInvoiceSchema } from "@/validation";
+import { invoiceSchema, Item, updateInvoiceSchema } from "@/validation";
 import {
   type APIGatewayProxyEvent,
   type APIGatewayProxyResult,
@@ -77,10 +77,10 @@ const updateInvoiceController = async (
     );
     await databaseClient.query("COMMIT");
 
-    const returnInvoice = {
-      ...addStatusToInvoice(updateInvoiceResult.rows?.[0] as Invoice),
+    const returnInvoice = invoiceSchema.parse({
+      ...addStatusToInvoice(updateInvoiceResult.rows?.[0]),
       items: itemsResult.rows as Item[],
-    };
+    });
 
     return {
       statusCode: 200,
